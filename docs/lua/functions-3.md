@@ -3300,6 +3300,32 @@
 <br />
 
 ---
+# functions from lag_compensation.h
+
+<br />
+
+
+## [lag_compensation_get_local_state](#lag_compensation_get_local_state)
+
+### Lua Example
+`local MarioStateValue = lag_compensation_get_local_state(otherNp)`
+
+### Parameters
+| Field | Type |
+| ----- | ---- |
+| otherNp | [NetworkPlayer](structs.md#NetworkPlayer) |
+
+### Returns
+[MarioState](structs.md#MarioState)
+
+### C Prototype
+`struct MarioState* lag_compensation_get_local_state(struct NetworkPlayer* otherNp);`
+
+[:arrow_up_small:](#)
+
+<br />
+
+---
 # functions from level_info.h
 
 <br />

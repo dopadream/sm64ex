@@ -50,6 +50,9 @@
 #include "pc/network/socket/domain_res.h"
 #include "pc/network/network_player.h"
 #include "pc/djui/djui.h"
+#include "pc/djui/djui_unicode.h"
+#include "pc/djui/djui_panel.h"
+#include "pc/djui/djui_panel_modlist.h"
 #include "pc/debuglog.h"
 #include "pc/utils/misc.h"
 
@@ -272,8 +275,16 @@ void main_func(void) {
     const char *userpath = gCLIOpts.SavePath[0] ? gCLIOpts.SavePath : sys_user_path();
     fs_init(sys_ropaths, gamedir, userpath);
 
+    sync_objects_init_system();
+    djui_unicode_init();
     mods_init();
-    configfile_load(configfile_name());
+
+    // load config
+    configfile_load();
+    if (!djui_language_init(configLanguage)) {
+        snprintf(configLanguage, MAX_CONFIG_STRING, "%s", "");
+    }
+
     dynos_pack_init();
 
     // If coop_custom_palette_* values are not found in sm64config.txt, the custom palette config will use the default values (Mario's palette)

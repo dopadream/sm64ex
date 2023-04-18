@@ -23,6 +23,7 @@
 #include "engine/math_util.h"
 #include "pc/network/network.h"
 #include "pc/lua/smlua.h"
+#include "pc/cheats.h"
 
 /**
  * Flags controlling what debug info is displayed.
@@ -296,6 +297,10 @@ void bhv_mario_update(void) {
     particleFlags |= gMarioState->particleFlags;
     gCurrentObject->oMarioParticleFlags = particleFlags;
 
+    if (gServerSettings.enableCheats && gCheats.rapidFireA && gMarioState->playerIndex == 0) {
+        gMarioState->controller->buttonDown &= ~A_BUTTON;
+    }
+
     // This code is meant to preserve old Lua mods' ability to set overridePaletteIndex and paletteIndex and still work
     // as they expected. USE_REAL_PALETTE_VAR is meant to help support cases where mods will do:
     //     np.overridePaletteIndex = np.paletteIndex
@@ -332,6 +337,7 @@ void bhv_mario_update(void) {
     update_character_anim_offset(gMarioState);
 
     // reset mario state to the local player
+    gInteractionInvulnerable = false;
     gMarioState = &gMarioStates[0];
 }
 
@@ -553,6 +559,12 @@ void spawn_objects_from_info(UNUSED s32 unused, struct SpawnInfo *spawnInfo) {
 
                 object->behavior = smlua_override_behavior(script);
                 object->unused1 = 0;
+
+                // set the sync id
+                if (spawnInfo->syncID) {
+                    object->oSyncID = spawnInfo->syncID;
+                    sync_object_set_id(object);
+                }
 
                 // Record death/collection in the SpawnInfo
                 object->respawnInfoType = RESPAWN_INFO_TYPE_32;

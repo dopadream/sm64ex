@@ -24,6 +24,7 @@
 #include "pc/configfile.h"
 #include "pc/network/network.h"
 #include "pc/lua/smlua.h"
+#include "pc/cheats.h"
 
 #define POLE_NONE          0
 #define POLE_TOUCHED_FLOOR 1
@@ -330,6 +331,11 @@ s32 perform_hanging_step(struct MarioState *m, Vec3f nextPos) {
     f32 ceilOffset;
 
     smlua_call_event_hooks_mario_param(HOOK_BEFORE_PHYS_STEP, m);
+
+    if (gServerSettings.enableCheats && gCheats.superSpeed && m->playerIndex == 0) {
+        m->vel[0] *= SUPER_SPEED_MULTIPLIER;
+        m->vel[2] *= SUPER_SPEED_MULTIPLIER;
+    }
 
     struct WallCollisionData wcd = { 0 };
     resolve_and_return_wall_collisions_data(nextPos, 50.0f, 50.0f, &wcd);
@@ -977,6 +983,7 @@ s32 act_bubbled(struct MarioState* m) {
     m->heldByObj = NULL;
     m->marioObj->oIntangibleTimer = -1;
     m->squishTimer = 0;
+    m->bounceSquishTimer = 0;
     set_mario_animation(m, MARIO_ANIM_SLEEP_IDLE);
 
     // force inputs

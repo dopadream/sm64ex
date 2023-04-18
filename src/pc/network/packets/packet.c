@@ -52,8 +52,8 @@ void packet_process(struct Packet* p) {
         case PACKET_JOIN:                    network_receive_join(p);                    break;
         case PACKET_CHAT:                    network_receive_chat(p);                    break;
         case PACKET_KICK:                    network_receive_kick(p);                    break;
-        case PACKET_COMMAND:                 network_recieve_chat_command(p);            break;
-        case PACKET_MODERATOR:               network_recieve_moderator(p);               break;
+        case PACKET_COMMAND:                 network_receive_chat_command(p);            break;
+        case PACKET_MODERATOR:               network_receive_moderator(p);               break;
         case PACKET_KEEP_ALIVE:              network_receive_keep_alive(p);              break;
         case PACKET_LEAVING:                 network_receive_leaving(p);                 break;
         case PACKET_SAVE_FILE:               network_receive_save_file(p);               break;
@@ -61,10 +61,8 @@ void packet_process(struct Packet* p) {
         case PACKET_NETWORK_PLAYERS:         network_receive_network_players(p);         break;
         case PACKET_DEATH:                   network_receive_death(p);                   break;
 
-        // reservation area
-        case PACKET_RESERVATION_LIST:        network_receive_reservation_list(p);        break;
-        case PACKET_RESERVATION_USE:         network_receive_reservation_use(p);         break;
-        case PACKET_RESERVATION_RELEASE:     network_receive_reservation_release(p);     break;
+        case PACKET_PING:                    network_receive_ping(p);                    break;
+        case PACKET_PONG:                    network_receive_pong(p);                    break;
 
         // location
         case PACKET_CHANGE_LEVEL:            network_receive_change_level(p);            break;
@@ -132,6 +130,10 @@ void packet_receive(struct Packet* p) {
 
     // refuse packets from unknown players other than join request
     if (gNetworkType == NT_SERVER && p->localIndex == UNKNOWN_LOCAL_INDEX && !network_allow_unknown_local_index(packetType)) {
+        if (gNetworkStartupTimer > 0) {
+            LOG_INFO("refusing packet from unknown player on startup, packetType: %d", packetType);
+            return;
+        }
         if (packetType != PACKET_PLAYER) {
             LOG_INFO("closing connection for packetType: %d", packetType);
             network_send_kick(0, EKT_CLOSE_CONNECTION);
@@ -159,7 +161,7 @@ void packet_receive(struct Packet* p) {
 
     // parse the packet without processing the rest
     if (packet_initial_read(p)) {
-        if (gNetworkType == NT_SERVER && p->destGlobalId != PACKET_DESTINATION_BROADCAST && p->destGlobalId != 0 && packetType != PACKET_ACK) {
+        if (gNetworkType == NT_SERVER && p->destGlobalId != PACKET_DESTINATION_BROADCAST && p->destGlobalId != 0 && packetType != PACKET_ACK && packetType != PACKET_MOD_LIST_REQUEST) {
             // this packet is meant for someone else
             struct Packet p2 = { 0 };
             packet_duplicate(p, &p2);

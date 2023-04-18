@@ -37,6 +37,7 @@
 #include "src/pc/controller/controller_sdl.h"
 #include "src/pc/controller/controller_bind_mapping.h"
 #include "pc/utils/misc.h"
+#include "pc/mods/mod_import.h"
 
 // TODO: figure out if this shit even works
 #ifdef VERSION_EU
@@ -100,6 +101,7 @@ static void gfx_sdl_reset_dimension_and_pos(void) {
 
 static void gfx_sdl_init(const char *window_title) {
     SDL_Init(SDL_INIT_VIDEO);
+    SDL_StartTextInput();
 
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
@@ -162,8 +164,11 @@ static void gfx_sdl_onkeyup(int scancode) {
         kb_key_up(translate_sdl_scancode(scancode));
 }
 
+static void gfx_sdl_ondropfile(char* path) {
+    mod_import_file(path);
+}
+
 static void gfx_sdl_handle_events(void) {
-    SDL_StartTextInput();
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
@@ -191,6 +196,9 @@ static void gfx_sdl_handle_events(void) {
                             break;
                     }
                 }
+                break;
+            case SDL_DROPFILE:
+                gfx_sdl_ondropfile(event.drop.file);
                 break;
             case SDL_QUIT:
                 game_exit();

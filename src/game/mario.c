@@ -176,7 +176,11 @@ void set_anim_to_frame(struct MarioState *m, s16 animFrame) {
 s32 is_anim_past_frame(struct MarioState *m, s16 animFrame) {
     s32 isPastFrame;
     s32 acceleratedFrame = animFrame << 0x10;
+
+    if (!m || !m->marioObj) { return TRUE; }
     struct AnimInfo *animInfo = &m->marioObj->header.gfx.animInfo;
+
+    if (!animInfo->curAnim) { return TRUE; }
     struct Animation *curAnim = animInfo->curAnim;
 
     if (animInfo->animAccel) {
@@ -1330,28 +1334,29 @@ u8 sSquishScaleOverTime[16] = { 0x46, 0x32, 0x32, 0x3C, 0x46, 0x50, 0x50, 0x3C,
  * Applies the squish to Mario's model via scaling.
  */
 void squish_mario_model(struct MarioState *m) {
-    if (m->squishTimer != 0xFF) {
-        // If no longer squished, scale back to default.
-        // Also handles the Tiny Mario and Huge Mario cheats.
-        if (m->squishTimer == 0) {
-            vec3f_set(m->marioObj->header.gfx.scale, 1.0f, 1.0f, 1.0f);
-        }
-        // If timer is less than 16, rubber-band Mario's size scale up and down.
-        else if (m->squishTimer <= 16) {
-            m->squishTimer -= 1;
+    if (m->squishTimer == 0xFF && m->bounceSquishTimer == 0) { return; }
 
-            m->marioObj->header.gfx.scale[1] =
-                1.0f - ((sSquishScaleOverTime[15 - m->squishTimer] * 0.6f) / 100.0f);
-            m->marioObj->header.gfx.scale[0] =
-                ((sSquishScaleOverTime[15 - m->squishTimer] * 0.4f) / 100.0f) + 1.0f;
-
-            m->marioObj->header.gfx.scale[2] = m->marioObj->header.gfx.scale[0];
-        } else {
-            m->squishTimer -= 1;
-
-            vec3f_set(m->marioObj->header.gfx.scale, 1.4f, 0.4f, 1.4f);
-        }
+    // If no longer squished, scale back to default.
+    // Also handles the Tiny Mario and Huge Mario cheats.
+    u8 squishTimer = (m->squishTimer > m->bounceSquishTimer) ? m->squishTimer : m->bounceSquishTimer;
+    if (squishTimer == 0) {
+        vec3f_set(m->marioObj->header.gfx.scale, 1.0f, 1.0f, 1.0f);
+        return;
     }
+
+    // If timer is less than 16, rubber-band Mario's size scale up and down.
+    if (squishTimer <= 16) {
+        squishTimer--;
+
+        m->marioObj->header.gfx.scale[1] = 1.0f - ((sSquishScaleOverTime[15 - squishTimer] * 0.6f) / 100.0f);
+        m->marioObj->header.gfx.scale[0] = ((sSquishScaleOverTime[15 - squishTimer] * 0.4f) / 100.0f) + 1.0f;
+        m->marioObj->header.gfx.scale[2] = m->marioObj->header.gfx.scale[0];
+    } else {
+        vec3f_set(m->marioObj->header.gfx.scale, 1.4f, 0.4f, 1.4f);
+    }
+
+    if (m->squishTimer > 0) { m->squishTimer--; }
+    if (m->bounceSquishTimer > 0) { m->bounceSquishTimer--; }
 }
 
 /**
@@ -1548,9 +1553,21 @@ void update_mario_inputs(struct MarioState *m) {
 
     debug_print_speed_action_normal(m);
 
-    if (Cheats.enabled && Cheats.moonJump && m->controller->buttonDown & L_TRIG) {
+    if (gServerSettings.enableCheats && gCheats.moonJump && m->playerIndex == 0 && m->controller->buttonDown & L_TRIG) {
+        if (m->action == ACT_FORWARD_GROUND_KB ||
+            m->action == ACT_BACKWARD_GROUND_KB ||
+            m->action == ACT_SOFT_FORWARD_GROUND_KB ||
+            m->action == ACT_HARD_BACKWARD_GROUND_KB ||
+            m->action == ACT_FORWARD_AIR_KB ||
+            m->action == ACT_BACKWARD_AIR_KB ||
+            m->action == ACT_HARD_FORWARD_AIR_KB ||
+            m->action == ACT_HARD_BACKWARD_AIR_KB ||
+            m->action == ACT_AIR_HIT_WALL) {
+            set_mario_action(m, ACT_FREEFALL, 0);
+        }
+
         m->faceAngle[1] = m->intendedYaw - approach_s32((s16)(m->intendedYaw - m->faceAngle[1]), 0, 0x800, 0x800);
-        m->vel[1] = 30;
+        m->vel[1] = 40;
     }
 
     /* Developer stuff */
@@ -1996,12 +2013,16 @@ s32 execute_mario_action(UNUSED struct Object *o) {
         }
     }
 
-    if (Cheats.enabled) {
-        if (Cheats.godMode) { gMarioState->health = 0x880; }
+    if (gServerSettings.enableCheats) {
+        if (gCheats.godMode) {
+            gMarioState->health = 0x880;
+            gMarioState->healCounter = 0;
+            gMarioState->hurtCounter = 0;
+        }
 
-        if (Cheats.infiniteLives && gMarioState->numLives < 100) { gMarioState->numLives = 100; }
-
-        if (Cheats.superSpeed && gMarioState->controller->stickMag > 0.5f) { gMarioState->forwardVel += 100; }
+        if (gCheats.infiniteLives && gMarioState->numLives < 100) {
+            gMarioState->numLives = 100;
+        }
     }
 
     if (gMarioState->action) {
@@ -2114,6 +2135,10 @@ s32 execute_mario_action(UNUSED struct Object *o) {
 #ifndef VERSION_JP
             play_sound(SOUND_ENV_WIND2, gMarioState->marioObj->header.gfx.cameraToObject);
 #endif
+        }
+
+        if (gServerSettings.enableCheats && gCheats.bljAnywhere && gMarioState->playerIndex == 0 && gMarioState->action == ACT_LONG_JUMP && gMarioState->forwardVel < -15 && gMarioState->input & INPUT_Z_DOWN && gMarioState->pos[1] - gMarioState->floorHeight < 90) {
+            gMarioState->vel[1] = -30;
         }
 
         play_infinite_stairs_music();

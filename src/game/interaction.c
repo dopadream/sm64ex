@@ -24,10 +24,12 @@
 #include "sm64.h"
 #include "sound_init.h"
 #include "rumble_init.h"
+#include "object_collision.h"
 #include "hardcoded.h"
 
 #include "pc/configfile.h"
 #include "pc/network/network.h"
+#include "pc/network/lag_compensation.h"
 #include "pc/lua/smlua_hooks.h"
 #include "pc/cheats.h"
 
@@ -57,7 +59,7 @@ enum InteractionFlag {
     (INT_SLIDE_KICK | INT_FAST_ATTACK_OR_SHELL)
 
 u8 sDelayInvincTimer;
-s16 sInvulnerable;
+s16 gInteractionInvulnerable;
 u32 interact_coin(struct MarioState *, u32, struct Object *);
 u32 interact_water_ring(struct MarioState *, u32, struct Object *);
 u32 interact_star_or_key(struct MarioState *, u32, struct Object *);
@@ -194,7 +196,7 @@ s16 mario_obj_angle_to_object(struct MarioState *m, struct Object *o) {
  * Determines Mario's interaction with a given object depending on their proximity,
  * action, speed, and position.
  */
-u32 determine_interaction(struct MarioState *m, struct Object *o) {
+static u32 determine_interaction_internal(struct MarioState *m, struct Object *o, u8 isPVP) {
     u32 interaction = 0;
     u32 action = m->action;
 
@@ -202,10 +204,7 @@ u32 determine_interaction(struct MarioState *m, struct Object *o) {
 
     // hack: make water punch actually do something
     if (interaction == 0 && m->action == ACT_WATER_PUNCH && o->oInteractType & INTERACT_PLAYER) {
-        s16 dYawToObject = mario_obj_angle_to_object(m, o) - m->faceAngle[1];
-        if (-0x2AAA <= dYawToObject && dYawToObject <= 0x2AAA) {
-            interaction = INT_PUNCH;
-        }
+        interaction = INT_PUNCH;
     }
 
     if (interaction == 0 && action & ACT_FLAG_ATTACKING) {
@@ -214,13 +213,13 @@ u32 determine_interaction(struct MarioState *m, struct Object *o) {
 
             if (m->flags & MARIO_PUNCHING) {
                 // 120 degrees total, or 60 each way
-                if (-0x2AAA <= dYawToObject && dYawToObject <= 0x2AAA) {
+                if (isPVP || (-0x2AAA <= dYawToObject && dYawToObject <= 0x2AAA)) {
                     interaction = INT_PUNCH;
                 }
             }
             if (m->flags & MARIO_KICKING) {
                 // 120 degrees total, or 60 each way
-                if (-0x2AAA <= dYawToObject && dYawToObject <= 0x2AAA) {
+                if (isPVP || (-0x2AAA <= dYawToObject && dYawToObject <= 0x2AAA)) {
                     interaction = INT_KICK;
                 }
             }
@@ -230,6 +229,7 @@ u32 determine_interaction(struct MarioState *m, struct Object *o) {
                     interaction = INT_TRIP;
                 }
             }
+
         } else if (action == ACT_GROUND_POUND || action == ACT_TWIRLING) {
             if (m->vel[1] < 0.0f) {
                 interaction = INT_GROUND_POUND_OR_TWIRL;
@@ -267,6 +267,14 @@ u32 determine_interaction(struct MarioState *m, struct Object *o) {
     }
 
     return interaction;
+}
+
+u32 determine_interaction(struct MarioState *m, struct Object *o) {
+    return determine_interaction_internal(m, o, FALSE);
+}
+
+u32 determine_interaction_pvp(struct MarioState *m, struct Object *o) {
+    return determine_interaction_internal(m, o, TRUE);
 }
 
 /**
@@ -816,7 +824,7 @@ u32 take_damage_from_interact_object(struct MarioState *m) {
 u32 take_damage_and_knock_back(struct MarioState *m, struct Object *o) {
     u32 damage;
 
-    if (!sInvulnerable && !(m->flags & MARIO_VANISH_CAP)
+    if (!gInteractionInvulnerable && !(m->flags & MARIO_VANISH_CAP)
         && !(o->oInteractionSubtype & INT_SUBTYPE_DELAY_INVINCIBILITY)) {
         o->oInteractStatus = INT_STATUS_INTERACTED | INT_STATUS_ATTACKED_MARIO;
         m->interactObj = o;
@@ -1288,9 +1296,8 @@ static u8 resolve_player_collision(struct MarioState* m, struct MarioState* m2) 
     u32 interaction = determine_interaction(m, m2->marioObj);
     f32 aboveFloor = m2->pos[1] - m2->floorHeight;
     if ((interaction & INT_HIT_FROM_ABOVE) && (aboveFloor < 1)) {
-        if (m2->playerIndex == 0) {
-            m2->squishTimer = max(m2->squishTimer, 4);
-        }
+        m2->bounceSquishTimer = max(m2->bounceSquishTimer, 4);
+
         f32 velY;
         if (m2->action == ACT_CROUCHING) {
             mario_stop_riding_and_holding(m);
@@ -1302,7 +1309,7 @@ static u8 resolve_player_collision(struct MarioState* m, struct MarioState* m2) 
             velY = fmax(fmin(55.0f, 15.0f + fabs(m->vel[1])), 35.0f);
         } else if (m->action == ACT_DOUBLE_JUMP) {
             mario_stop_riding_and_holding(m);
-            set_mario_action(m, (m->specialTripleJump && m->playerIndex == 0) ? ACT_SPECIAL_TRIPLE_JUMP : ACT_TRIPLE_JUMP, 0);
+            set_mario_action(m, (m->specialTripleJump && m->playerIndex == 0) ? ACT_SPECIAL_TRIPLE_JUMP : m->flags & MARIO_WING_CAP ? ACT_FLYING_TRIPLE_JUMP : ACT_TRIPLE_JUMP, 0);
             velY = fmax(fmin(60.0f, 20.0f + fabs(m->vel[1])), 40.0f);
         } else {
             mario_stop_riding_and_holding(m);
@@ -1346,6 +1353,8 @@ u8 player_is_sliding(struct MarioState* m) {
 }
 
 u8 passes_pvp_interaction_checks(struct MarioState* attacker, struct MarioState* victim) {
+    if (!attacker || !victim) { return false; }
+
     // attacked
     u8 isInCutscene = ((attacker->action & ACT_GROUP_MASK) == ACT_GROUP_CUTSCENE) || ((victim->action & ACT_GROUP_MASK) == ACT_GROUP_CUTSCENE);
     isInCutscene = isInCutscene || (attacker->action == ACT_IN_CANNON) || (victim->action == ACT_IN_CANNON);
@@ -1357,11 +1366,12 @@ u8 passes_pvp_interaction_checks(struct MarioState* attacker, struct MarioState*
                           || attacker->action == ACT_WALL_KICK_AIR || attacker->action == ACT_WATER_JUMP
                           || attacker->action == ACT_STEEP_JUMP || attacker->action == ACT_HOLD_JUMP);
     u8 isVictimIntangible = (victim->action & ACT_FLAG_INTANGIBLE);
+    u8 isVictimGroundPounding = (victim->action == ACT_GROUND_POUND) && (victim->actionState != 0);
     if (victim->knockbackTimer > 0) {
         return false;
     }
 
-    return (!isInvulnerable && !isIgnoredAttack && !isAttackerInvulnerable && !isVictimIntangible);
+    return (!isInvulnerable && !isIgnoredAttack && !isAttackerInvulnerable && !isVictimIntangible && !isVictimGroundPounding);
 }
 
 u32 interact_player(struct MarioState* m, UNUSED u32 interactType, struct Object* o) {
@@ -1394,77 +1404,107 @@ u32 interact_player(struct MarioState* m, UNUSED u32 interactType, struct Object
         return FALSE;
     }
 
-    // don't attack each other on level load
+    // don't touch each other on level load
     if (gCurrentArea == NULL || gCurrentArea->localAreaTimer < 60) {
         return FALSE;
     }
 
-    u32 interaction = determine_interaction(m, o);
+    return FALSE;
+}
 
-    if ((interaction & INT_ANY_ATTACK) && !(interaction & INT_HIT_FROM_ABOVE) && passes_pvp_interaction_checks(m, m2)) {
-        bool allow = true;
-        smlua_call_event_hooks_mario_params_ret_bool(HOOK_ALLOW_PVP_ATTACK, m, m2, &allow);
-        if (!allow) {
-            // Lua blocked the interaction
-            return false;
-        }
+u32 interact_player_pvp(struct MarioState* attacker, struct MarioState* victim) {
+    if (!is_player_active(attacker)) { return FALSE; }
+    if (!is_player_active(victim)) { return FALSE; }
+    if (gServerSettings.playerInteractions == PLAYER_INTERACTIONS_NONE) { return FALSE; }
+    if (attacker->action == ACT_JUMBO_STAR_CUTSCENE) { return FALSE; }
+    if (attacker->action == ACT_JUMBO_STAR_CUTSCENE) { return FALSE; }
 
-        // determine if slide attack should be ignored
-        if ((interaction & INT_ATTACK_SLIDE) || player_is_sliding(m2)) {
-            // determine the difference in velocities
-            Vec3f velDiff;
-            vec3f_dif(velDiff, m->vel, m2->vel);
+    // vanish cap players can't interact
+    u32 vanishFlags = (MARIO_VANISH_CAP | MARIO_CAP_ON_HEAD);
+    if ((attacker->flags & vanishFlags) == vanishFlags) { return FALSE; }
+    if ((victim->flags   & vanishFlags) == vanishFlags) { return FALSE; }
 
-            if (m->action == ACT_SLIDE_KICK_SLIDE || m->action == ACT_SLIDE_KICK) {
-                if (vec3f_length(m->vel) < 15) {
-                    return FALSE;
-                }
-            } else {
-                if (vec3f_length(m->vel) < 40) {
-                    // the difference vectors are not different enough, do not attack
-                    return FALSE;
-                }
-            }
-            if (vec3f_length(m2->vel) > vec3f_length(m->vel)) {
-                // the one being attacked is going faster, do not attack
-                return FALSE;
-            }
-        }
+    // don't attack each other on level load
+    if (gCurrentArea == NULL || gCurrentArea->localAreaTimer < 60) { return FALSE; }
 
-        // determine if ground pound should be ignored
-        if (m->action == ACT_GROUND_POUND) {
-            // not moving down yet?
-            if (m->actionState == 0) { return FALSE; }
-            m2->squishTimer = max(m2->squishTimer, 20);
-        }
+    // make sure it passes pvp checks before rollback
+    if (!passes_pvp_interaction_checks(attacker, victim)) { return FALSE; }
 
-        if (m2->playerIndex == 0) {
-            m2->interactObj = m->marioObj;
-            if (interaction & INT_KICK) {
-                if (m2->action == ACT_FIRST_PERSON) {
-                    // without this branch, the player will be stuck in first person
-                    raise_background_noise(2);
-                    set_camera_mode(m2->area->camera, -1, 1);
-                    m2->input &= ~INPUT_FIRST_PERSON;
-                }
-                set_mario_action(m2, ACT_FREEFALL, 0);
-            }
-            if (!(m2->flags & MARIO_METAL_CAP)) {
-                m->marioObj->oDamageOrCoinValue = determine_player_damage_value(interaction);
-                if (m->flags & MARIO_METAL_CAP) {
-                    m->marioObj->oDamageOrCoinValue *= 2;
-                }
-            }
-        }
-        m2->invincTimer = max(m2->invincTimer, 3);
-        take_damage_and_knock_back(m2, m->marioObj);
-        bounce_back_from_attack(m, interaction);
-        m2->interactObj = NULL;
+    // grab the lag compensation version of the victim
+    struct MarioState* cVictim = NULL;
+    if (victim->playerIndex == 0) {
+        cVictim = lag_compensation_get_local_state(&gNetworkPlayers[attacker->playerIndex]);
+    }
+    if (cVictim == NULL) { cVictim = victim; }
 
-        smlua_call_event_hooks_mario_params(HOOK_ON_PVP_ATTACK, m, m2);
+    // make sure we overlap
+    f32 overlapScale = (attacker->playerIndex == 0) ? 0.6f : 1.0f;
+    if (!detect_player_hitbox_overlap(attacker, cVictim, overlapScale)) {
         return FALSE;
     }
 
+    // see if it was an attack
+    u32 interaction = determine_interaction_pvp(attacker, cVictim->marioObj);
+    if (!(interaction & INT_ANY_ATTACK) || (interaction & INT_HIT_FROM_ABOVE) || !passes_pvp_interaction_checks(attacker, cVictim)) {
+        return FALSE;
+    }
+
+    // call the lua hook
+    bool allow = true;
+    smlua_call_event_hooks_mario_params_ret_bool(HOOK_ALLOW_PVP_ATTACK, attacker, cVictim, &allow);
+    if (!allow) {
+        // Lua blocked the interaction
+        return FALSE;
+    }
+
+    // determine if slide attack should be ignored
+    if ((interaction & INT_ATTACK_SLIDE) || player_is_sliding(cVictim)) {
+        // determine the difference in velocities
+        Vec3f velDiff;
+        vec3f_dif(velDiff, attacker->vel, cVictim->vel);
+
+        if (attacker->action == ACT_SLIDE_KICK_SLIDE || attacker->action == ACT_SLIDE_KICK) {
+            // if the difference vectors are not different enough, do not attack
+            if (vec3f_length(attacker->vel) < 15) { return FALSE; }
+        } else {
+            // if the difference vectors are not different enough, do not attack
+            if (vec3f_length(attacker->vel) < 40) { return FALSE; }
+        }
+
+        // if the victim is going faster, do not attack
+        if (vec3f_length(cVictim->vel) > vec3f_length(attacker->vel)) { return FALSE; }
+    }
+
+    // determine if ground pound should be ignored
+    if (attacker->action == ACT_GROUND_POUND) {
+        // not moving down yet?
+        if (attacker->actionState == 0) { return FALSE; }
+        victim->bounceSquishTimer = max(victim->bounceSquishTimer, 20);
+    }
+
+    if (victim->playerIndex == 0) {
+        victim->interactObj = attacker->marioObj;
+        if (interaction & INT_KICK) {
+            if (victim->action == ACT_FIRST_PERSON) {
+                // without this branch, the player will be stuck in first person
+                raise_background_noise(2);
+                set_camera_mode(victim->area->camera, -1, 1);
+                victim->input &= ~INPUT_FIRST_PERSON;
+            }
+            set_mario_action(victim, ACT_FREEFALL, 0);
+        }
+        if (!(victim->flags & MARIO_METAL_CAP)) {
+            attacker->marioObj->oDamageOrCoinValue = determine_player_damage_value(interaction);
+            if (attacker->flags & MARIO_METAL_CAP) { attacker->marioObj->oDamageOrCoinValue *= 2; }
+        }
+    }
+
+    victim->invincTimer = max(victim->invincTimer, 3);
+    take_damage_and_knock_back(victim, attacker->marioObj);
+    bounce_back_from_attack(attacker, interaction);
+    victim->interactObj = NULL;
+
+    smlua_call_event_hooks_mario_params(HOOK_ON_PVP_ATTACK, attacker, victim);
     return FALSE;
 }
 
@@ -1549,7 +1589,7 @@ u32 interact_strong_wind(struct MarioState *m, UNUSED u32 interactType, struct O
 u32 interact_flame(struct MarioState *m, UNUSED u32 interactType, struct Object *o) {
     u32 burningAction = ACT_BURNING_JUMP;
 
-    if (!sInvulnerable && !(m->flags & MARIO_METAL_CAP) && !(m->flags & MARIO_VANISH_CAP)
+    if (!gInteractionInvulnerable && !(m->flags & MARIO_METAL_CAP) && !(m->flags & MARIO_VANISH_CAP)
         && !(o->oInteractionSubtype & INT_SUBTYPE_DELAY_INVINCIBILITY)) {
         queue_rumble_data_mario(m, 5, 80);
 
@@ -1576,7 +1616,7 @@ u32 interact_flame(struct MarioState *m, UNUSED u32 interactType, struct Object 
 }
 
 u32 interact_snufit_bullet(struct MarioState *m, UNUSED u32 interactType, struct Object *o) {
-    if (!sInvulnerable && !(m->flags & MARIO_VANISH_CAP)) {
+    if (!gInteractionInvulnerable && !(m->flags & MARIO_VANISH_CAP)) {
         if (m->flags & MARIO_METAL_CAP) {
             o->oInteractStatus = INT_STATUS_INTERACTED | INT_STATUS_WAS_ATTACKED;
             play_sound(SOUND_ACTION_UNKNOWN458, m->marioObj->header.gfx.cameraToObject);
@@ -1641,7 +1681,7 @@ u32 interact_bully(struct MarioState *m, UNUSED u32 interactType, struct Object 
         return TRUE;
     }
 
-    else if (!sInvulnerable && !(m->flags & MARIO_VANISH_CAP)
+    else if (!gInteractionInvulnerable && !(m->flags & MARIO_VANISH_CAP)
              && !(o->oInteractionSubtype & INT_SUBTYPE_DELAY_INVINCIBILITY)) {
         o->oInteractStatus = INT_STATUS_INTERACTED;
         m->invincTimer = 2;
@@ -1661,7 +1701,7 @@ u32 interact_bully(struct MarioState *m, UNUSED u32 interactType, struct Object 
 }
 
 u32 interact_shock(struct MarioState *m, UNUSED u32 interactType, struct Object *o) {
-    if (!sInvulnerable && !(m->flags & MARIO_VANISH_CAP)
+    if (!gInteractionInvulnerable && !(m->flags & MARIO_VANISH_CAP)
         && !(o->oInteractionSubtype & INT_SUBTYPE_DELAY_INVINCIBILITY)) {
         u32 actionArg = (m->action & (ACT_FLAG_AIR | ACT_FLAG_ON_POLE | ACT_FLAG_HANGING)) == 0;
 
@@ -1878,7 +1918,7 @@ u32 interact_koopa_shell(struct MarioState *m, UNUSED u32 interactType, struct O
 u32 check_object_grab_mario(struct MarioState *m, UNUSED u32 interactType, struct Object *o) {
     if (m != &gMarioStates[0]) { return false; }
 
-    if ((!(m->action & (ACT_FLAG_AIR | ACT_FLAG_INVULNERABLE | ACT_FLAG_ATTACKING)) || !sInvulnerable)
+    if ((!(m->action & (ACT_FLAG_AIR | ACT_FLAG_INVULNERABLE | ACT_FLAG_ATTACKING)) || !gInteractionInvulnerable)
         && (o->oInteractionSubtype & INT_SUBTYPE_GRABS_MARIO)) {
         if (object_facing_mario(m, o, 0x2AAA)) {
             mario_stop_riding_and_holding(m);
@@ -2184,7 +2224,7 @@ void check_kick_or_punch_wall(struct MarioState *m) {
 
 void mario_process_interactions(struct MarioState *m) {
     sDelayInvincTimer = FALSE;
-    sInvulnerable = (m->action & ACT_FLAG_INVULNERABLE) || m->invincTimer != 0;
+    gInteractionInvulnerable = (m->action & ACT_FLAG_INVULNERABLE) || m->invincTimer != 0;
 
     if (!(m->action & ACT_FLAG_INTANGIBLE) && m->collidedObjInteractTypes != 0 && is_player_active(m)) {
         s32 i;
@@ -2212,6 +2252,15 @@ void mario_process_interactions(struct MarioState *m) {
                     }
                 }
             }
+        }
+    }
+
+    if (!(m->action & ACT_FLAG_INTANGIBLE) && is_player_active(m)) {
+        for (s32 i = 0; i < MAX_PLAYERS; i++) {
+            struct NetworkPlayer* np2 = &gNetworkPlayers[i];
+            if (!np2->connected) { continue; }
+            if (&gMarioStates[i] == m) { continue; }
+            interact_player_pvp(m, &gMarioStates[i]);
         }
     }
 
@@ -2271,7 +2320,7 @@ void check_death_barrier(struct MarioState *m) {
 void check_lava_boost(struct MarioState *m) {
     bool allow = true;
     smlua_call_event_hooks_mario_param_ret_bool(HOOK_ALLOW_HAZARD_SURFACE, m, &allow);
-    if (m->action == ACT_BUBBLED || (Cheats.enabled && Cheats.godMode) || (!allow)) { return; }
+    if (m->action == ACT_BUBBLED || (gServerSettings.enableCheats && gCheats.godMode) || (!allow)) { return; }
     if (!(m->action & ACT_FLAG_RIDING_SHELL) && m->pos[1] < m->floorHeight + 10.0f) {
         if (!(m->flags & MARIO_METAL_CAP)) {
             m->hurtCounter += (m->flags & MARIO_CAP_ON_HEAD) ? 12 : 18;

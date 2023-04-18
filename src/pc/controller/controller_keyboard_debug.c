@@ -17,6 +17,7 @@
 
 static bool sHoldingAlt = false;
 static bool sHoldingShift = false;
+bool gDebugToggle = false;
 
 #define SCANCODE_0 0x0B
 #define SCANCODE_1 0x02
@@ -31,6 +32,8 @@ static bool sHoldingShift = false;
 #define SCANCODE_F5 0x3f
 #define SCANCODE_ALT 0x38
 #define SCANCODE_SHIFT 0x2A
+
+extern void print_sync_object_table(void);
 
 static void debug_breakpoint_here(void) {
     // create easy breakpoint position for debugging
@@ -81,16 +84,20 @@ static void debug_reload_lua(void) {
 }
 
 static void debug_spawn_object(void) {
-    struct Object* box = spawn_object(gMarioStates[0].marioObj, MODEL_BREAKABLE_BOX_SMALL, bhvBreakableBoxSmall);
-    if (box == NULL) { return; }
-    if (!sync_object_set_id(box)) {
-        box->activeFlags = ACTIVE_FLAG_DEACTIVATED;
-        return;
-    }
+    for (int i = 0; i < 1; i++) {
+        struct Object* box = spawn_object(gMarioStates[0].marioObj, MODEL_BREAKABLE_BOX_SMALL, bhvBreakableBoxSmall);
+        if (box == NULL) { return; }
+        //box->oPosX += (random_float() - 0.5f) * 1000.0f;
+        //box->oPosZ += (random_float() - 0.5f) * 1000.0f;
+        if (!sync_object_set_id(box)) {
+            box->activeFlags = ACTIVE_FLAG_DEACTIVATED;
+            return;
+        }
 
-    struct Object* spawn_objects[] = { box };
-    u32 models[] = { MODEL_BREAKABLE_BOX_SMALL };
-    network_send_spawn_objects(spawn_objects, models, 1);
+        struct Object* spawn_objects[] = { box };
+        u32 models[] = { MODEL_BREAKABLE_BOX_SMALL };
+        network_send_spawn_objects(spawn_objects, models, 1);
+    }
 }
 
 void debug_keyboard_on_key_down(int scancode) {
@@ -99,12 +106,14 @@ void debug_keyboard_on_key_down(int scancode) {
             case SCANCODE_ALT: sHoldingAlt = true; break;
             case SCANCODE_SHIFT: sHoldingShift = true; break;
             case SCANCODE_3: debug_breakpoint_here(); break;
-            case SCANCODE_1:  if (sHoldingAlt) { debug_warp_level1();  } break;
-            case SCANCODE_2:  if (sHoldingAlt) { debug_warp_level2();  } break;
-            case SCANCODE_4:  if (sHoldingAlt) { debug_warp_level3();  } break;
-            case SCANCODE_8:  if (sHoldingAlt) { debug_spawn_object(); } break;
-            case SCANCODE_9:  if (sHoldingAlt) { debug_warp_to();      } break;
-            case SCANCODE_0:  if (sHoldingAlt) { debug_suicide();      } break;
+            case SCANCODE_1:  if (sHoldingAlt) { debug_warp_level1();       } break;
+            case SCANCODE_2:  if (sHoldingAlt) { debug_warp_level2();       } break;
+            case SCANCODE_4:  if (sHoldingAlt) { debug_warp_level3();       } break;
+            case SCANCODE_5:  if (sHoldingAlt) { print_sync_object_table(); } break;
+            case SCANCODE_6:  if (sHoldingAlt) { gDebugToggle = !gDebugToggle; } break;
+            case SCANCODE_8:  if (sHoldingAlt) { debug_spawn_object();      } break;
+            case SCANCODE_9:  if (sHoldingAlt) { debug_warp_to();           } break;
+            case SCANCODE_0:  if (sHoldingAlt) { debug_suicide();           } break;
             case SCANCODE_F5: debug_reload_lua(); break;
         }
     }

@@ -6,6 +6,7 @@
 #include "game/characters.h"
 
 #define CONFIGFILE_DEFAULT "sm64config.txt"
+#define CONFIGFILE_BACKUP "sm64config-backup.txt"
 
 #define MAX_BINDS  3
 #define MAX_VOLUME 127
@@ -109,9 +110,11 @@ extern bool         configSingleplayerPause;
 extern bool         configDebugPrint;
 extern bool         configDebugInfo;
 extern bool         configDebugError;
+extern char         configLanguage[];
 
-void configfile_load(const char *filename);
+void configfile_load(void);
 void configfile_save(const char *filename);
 const char *configfile_name(void);
+const char *configfile_backup_name(void);
 
 #endif

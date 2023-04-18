@@ -20,6 +20,7 @@
 #include "src/game/sound_init.h"
 #include "src/pc/djui/djui_hud_utils.h"
 #include "src/pc/network/network_player.h"
+#include "src/pc/network/lag_compensation.h"
 #include "include/behavior_table.h"
 #include "src/pc/lua/utils/smlua_obj_utils.h"
 #include "src/pc/lua/utils/smlua_misc_utils.h"
@@ -12639,6 +12640,27 @@ int smlua_func_take_damage_and_knock_back(lua_State* L) {
     if (!gSmLuaConvertSuccess) { LOG_LUA("Failed to convert parameter %u for function '%s'", 2, "take_damage_and_knock_back"); return 0; }
 
     lua_pushinteger(L, take_damage_and_knock_back(m, o));
+
+    return 1;
+}
+
+  ////////////////////////
+ // lag_compensation.h //
+////////////////////////
+
+int smlua_func_lag_compensation_get_local_state(lua_State* L) {
+    if (L == NULL) { return 0; }
+
+    int top = lua_gettop(L);
+    if (top != 1) {
+        LOG_LUA_LINE("Improper param count for '%s': Expected %u, Received %u", "lag_compensation_get_local_state", 1, top);
+        return 0;
+    }
+
+    struct NetworkPlayer* otherNp = (struct NetworkPlayer*)smlua_to_cobject(L, 1, LOT_NETWORKPLAYER);
+    if (!gSmLuaConvertSuccess) { LOG_LUA("Failed to convert parameter %u for function '%s'", 1, "lag_compensation_get_local_state"); return 0; }
+
+    smlua_push_object(L, LOT_MARIOSTATE, lag_compensation_get_local_state(otherNp));
 
     return 1;
 }
@@ -27208,6 +27230,21 @@ int smlua_func_get_network_area_timer(UNUSED lua_State* L) {
     return 1;
 }
 
+int smlua_func_get_os_name(UNUSED lua_State* L) {
+    if (L == NULL) { return 0; }
+
+    int top = lua_gettop(L);
+    if (top != 0) {
+        LOG_LUA_LINE("Improper param count for '%s': Expected %u, Received %u", "get_os_name", 0, top);
+        return 0;
+    }
+
+
+    lua_pushstring(L, get_os_name());
+
+    return 1;
+}
+
 int smlua_func_get_skybox(UNUSED lua_State* L) {
     if (L == NULL) { return 0; }
 
@@ -28369,6 +28406,21 @@ int smlua_func_smlua_text_utils_extra_text_replace(lua_State* L) {
     if (!gSmLuaConvertSuccess) { LOG_LUA("Failed to convert parameter %u for function '%s'", 2, "smlua_text_utils_extra_text_replace"); return 0; }
 
     smlua_text_utils_extra_text_replace(index, text);
+
+    return 1;
+}
+
+int smlua_func_smlua_text_utils_get_language(UNUSED lua_State* L) {
+    if (L == NULL) { return 0; }
+
+    int top = lua_gettop(L);
+    if (top != 0) {
+        LOG_LUA_LINE("Improper param count for '%s': Expected %u, Received %u", "smlua_text_utils_get_language", 0, top);
+        return 0;
+    }
+
+
+    lua_pushstring(L, smlua_text_utils_get_language());
 
     return 1;
 }
@@ -29863,6 +29915,9 @@ void smlua_bind_functions_autogen(void) {
     smlua_bind_function(L, "passes_pvp_interaction_checks", smlua_func_passes_pvp_interaction_checks);
     smlua_bind_function(L, "take_damage_and_knock_back", smlua_func_take_damage_and_knock_back);
 
+    // lag_compensation.h
+    smlua_bind_function(L, "lag_compensation_get_local_state", smlua_func_lag_compensation_get_local_state);
+
     // level_info.h
     smlua_bind_function(L, "get_level_name", smlua_func_get_level_name);
     smlua_bind_function(L, "get_level_name_ascii", smlua_func_get_level_name_ascii);
@@ -30576,6 +30631,7 @@ void smlua_bind_functions_autogen(void) {
     smlua_bind_function(L, "get_last_star_or_key", smlua_func_get_last_star_or_key);
     smlua_bind_function(L, "get_lighting_dir", smlua_func_get_lighting_dir);
     smlua_bind_function(L, "get_network_area_timer", smlua_func_get_network_area_timer);
+    smlua_bind_function(L, "get_os_name", smlua_func_get_os_name);
     smlua_bind_function(L, "get_skybox", smlua_func_get_skybox);
     smlua_bind_function(L, "get_temp_s32_pointer", smlua_func_get_temp_s32_pointer);
     smlua_bind_function(L, "get_time", smlua_func_get_time);
@@ -30643,6 +30699,7 @@ void smlua_bind_functions_autogen(void) {
     smlua_bind_function(L, "smlua_text_utils_course_acts_replace", smlua_func_smlua_text_utils_course_acts_replace);
     smlua_bind_function(L, "smlua_text_utils_dialog_replace", smlua_func_smlua_text_utils_dialog_replace);
     smlua_bind_function(L, "smlua_text_utils_extra_text_replace", smlua_func_smlua_text_utils_extra_text_replace);
+    smlua_bind_function(L, "smlua_text_utils_get_language", smlua_func_smlua_text_utils_get_language);
     smlua_bind_function(L, "smlua_text_utils_reset_all", smlua_func_smlua_text_utils_reset_all);
     smlua_bind_function(L, "smlua_text_utils_secret_star_replace", smlua_func_smlua_text_utils_secret_star_replace);
 

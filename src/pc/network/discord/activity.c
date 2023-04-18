@@ -24,6 +24,7 @@ static void on_activity_join_callback(UNUSED void* data, enum EDiscordResult res
         LOGFILE_ERROR(LFT_DISCORD, "Joined lobby when already connected somewhere!");
         return;
     }
+    network_reset_reconnect_and_rehost();
     network_init(NT_CLIENT);
 
     gCurActivity.type = DiscordActivityType_Playing;
@@ -129,6 +130,16 @@ void discord_activity_update(bool hosting) {
 
     if (snprintf(gCurActivity.details, 125, "%s", details) < 0) {
         LOGFILE_INFO(LFT_DISCORD, "truncating details");
+    }
+
+    if (!app.activities) {
+        LOGFILE_INFO(LFT_DISCORD, "no activities");
+        return;
+    }
+
+    if (!app.activities->update_activity) {
+        LOGFILE_INFO(LFT_DISCORD, "no update_activity");
+        return;
     }
 
     app.activities->update_activity(app.activities, &gCurActivity, NULL, on_activity_update_callback);

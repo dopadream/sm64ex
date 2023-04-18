@@ -1,5 +1,9 @@
 #include <string.h>
 #include "djui.h"
+#include "djui_panel.h"
+#include "djui_panel_pause.h"
+#include "djui_panel_modlist.h"
+#include "djui_panel_playerlist.h"
 
 #include "src/pc/controller/controller_sdl.h"
 #include "src/pc/controller/controller_mouse.h"
@@ -495,7 +499,7 @@ void djui_interactable_create(struct DjuiBase* base, void (*update_style)(struct
     }
 
     struct DjuiInteractable* interactable = calloc(1, sizeof(struct DjuiInteractable));
-    memset(interactable, 0, sizeof(struct DjuiInteractable));
+    interactable->enabled = true;
     base->interactable = interactable;
 
     base->interactable->update_style = update_style;

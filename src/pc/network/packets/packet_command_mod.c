@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "../network.h"
+#include "pc/djui/djui_language.h"
 #include "pc/djui/djui_chat_message.h"
 #include "pc/network/ban_list.h"
 #include "pc/network/moderator_list.h"
@@ -17,7 +18,7 @@ void network_send_chat_command(u8 globalIndex, enum ChatConfirmCommand ccc) {
     }
 }
 
-void network_recieve_chat_command(struct Packet *p) {
+void network_receive_chat_command(struct Packet *p) {
     if (!moderator_list_contains(gNetworkSystem->get_id_str(p->localIndex))) {
         return;
     }
@@ -58,11 +59,11 @@ void network_send_moderator(u8 localIndex) {
     network_send_to(localIndex, &p);
 }
 
-void network_recieve_moderator(struct Packet *p) {
+void network_receive_moderator(struct Packet *p) {
     if ((gIsModerator) || (network_player_any_connected() && gNetworkPlayers[p->localIndex].type != NPT_SERVER)) {
         return;
     }
 
     gIsModerator = true;
-    djui_chat_message_create("\\#fff982\\You are now a Moderator.");
+    djui_chat_message_create(DLANG(CHAT, MOD_GRANTED));
 }

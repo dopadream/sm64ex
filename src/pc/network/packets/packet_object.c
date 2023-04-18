@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <limits.h>
 #include "../network.h"
-#include "../reservation_area.h"
 #include "object_fields.h"
 #include "object_constants.h"
 #include "behavior_data.h"
@@ -274,7 +273,7 @@ void network_send_object(struct Object* o) {
 
     // sanity check SyncObject
     if (!sync_object_is_initialized(o->oSyncID)) {
-        LOG_ERROR("tried to send uninitialized sync obj");
+        //LOG_ERROR("tried to send uninitialized sync obj");
         return;
     }
     if (o->behavior == smlua_override_behavior(bhvRespawner)) {
@@ -308,7 +307,7 @@ void network_send_object_reliability(struct Object* o, bool reliable) {
 
     // sanity check SyncObject
     if (!sync_object_is_initialized(o->oSyncID)) {
-        LOG_ERROR("tried to send uninitialized sync obj");
+        //LOG_ERROR("tried to send uninitialized sync obj");
         return;
     }
 
@@ -353,11 +352,6 @@ void network_send_object_reliability(struct Object* o, bool reliable) {
     // check for object death
     if (o->activeFlags == ACTIVE_FLAG_DEACTIVATED) {
         sync_object_forget(so->id);
-        if (gNetworkType == NT_SERVER) {
-            reservation_area_release(gNetworkPlayerLocal, syncId);
-        } else {
-            network_send_reservation_release(syncId);
-        }
     } else if (so->rememberLastReliablePacket) {
         // remember packet
         packet_duplicate(&p, &so->lastReliablePacket);
@@ -462,7 +456,7 @@ void network_update_objects(void) {
 
 #ifdef DEVELOPMENT
     static f32 lastDebugSync = 0;
-    if (clock_elapsed() - lastDebugSync >= 1) {
+    if (clock_elapsed() - lastDebugSync >= 5) {
         network_send_debug_sync();
         lastDebugSync = clock_elapsed();
     }

@@ -78,7 +78,7 @@ override_field_invisible = {
 }
 
 override_field_immutable = {
-    "MarioState": [ "playerIndex" ],
+    "MarioState": [ "playerIndex", "controller" ],
     "Character": [ "*" ],
     "NetworkPlayer": [ "*" ],
     "TextureInfo": [ "*" ],
@@ -86,11 +86,12 @@ override_field_immutable = {
     "GlobalObjectAnimations": [ "*"],
     "SpawnParticlesInfo": [ "model" ],
     "MarioBodyState": [ "updateTorsoTime" ],
-    "Area": [ "localAreaTimer" ],
+    "Area": [ "localAreaTimer", "nextSyncID" ],
     "Mod": [ "*" ],
     "ModFile": [ "*" ],
     "BassAudio": [ "*" ],
-    "Painting": [ "id", "imageCount", "textureType", "textureWidth", "textureHeight" ]
+    "Painting": [ "id", "imageCount", "textureType", "textureWidth", "textureHeight" ],
+    "SpawnInfo": [ "syncID" ]
 }
 
 override_allowed_structs = {

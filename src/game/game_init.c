@@ -21,6 +21,7 @@
 #include "segment_symbols.h"
 #include "rng_position.h"
 #include "src/pc/djui/djui.h"
+#include "src/pc/djui/djui_panel_pause.h"
 #include "rumble_init.h"
 #include <prevent_bss_reordering.h>
 #ifdef BETTERCAMERA
@@ -388,6 +389,14 @@ void adjust_analog_stick(struct Controller *controller) {
         controller->stickY *= 64 / controller->stickMag;
         controller->stickMag = 64;
     }
+
+    /*extern bool gDebugToggle;
+    if (gDebugToggle) {
+        controller->stickX = 64;
+        controller->stickY = 0;
+        controller->stickMag = 64;
+    }*/
+
 }
 
 // if a demo sequence exists, this will run the demo
@@ -490,6 +499,7 @@ void read_controller_inputs(void) {
             controller->stickY = 0;
             controller->stickMag = 0;
         }
+
     }
 
     // For some reason, player 1's inputs are copied to player 3's port. This

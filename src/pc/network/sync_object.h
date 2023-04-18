@@ -2,6 +2,7 @@
 #define SYNC_OBJECT_H
 
 #define MAX_SYNC_OBJECT_FIELDS 64
+#define SYNC_ID_BLOCK_SIZE 4096
 
 #include "pc/network/packets/packet.h"
 
@@ -34,13 +35,15 @@ struct SyncObject {
     bool lastReliablePacketIsStale;
     u16 extendedModelId;
     struct Packet lastReliablePacket;
+    u8 forgetting;
 };
 
 
   ////////////
  // system //
 ////////////
-
+void sync_objects_init_system(void);
+void sync_objects_update(void);
 void sync_objects_clear(void);
 void sync_object_forget(u32 syncId);
 void sync_object_forget_last_reliable_packet(u32 syncId);
@@ -54,7 +57,6 @@ void sync_object_init_field_with_size(struct Object *o, void* field, u8 size);
 
 struct SyncObject* sync_object_get(u32 syncId);
 struct SyncObject* sync_object_get_first(void);
-struct SyncObject* sync_object_get_first_non_static(void);
 struct SyncObject* sync_object_get_next(void);
 struct Object* sync_object_get_object(u32 syncId);
 bool sync_object_is_initialized(u32 syncId);

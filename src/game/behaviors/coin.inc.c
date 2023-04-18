@@ -110,6 +110,12 @@ void bhv_coin_loop(void) {
 }
 
 void bhv_coin_formation_spawn_loop(void) {
+
+    // give yellow coins a sync id to fix romhack coin formations
+    if (!gNetworkAreaLoaded && o->oSyncID == 0) {
+        sync_object_init(o, SYNC_DISTANCE_ONLY_EVENTS);
+    }
+
     if (o->oTimer == 0) {
         cur_obj_set_behavior(bhvYellowCoin);
         obj_set_hitbox(o, &sYellowCoinHitbox);
@@ -249,7 +255,7 @@ void coin_inside_boo_act_0(void) {
 void (*sCoinInsideBooActions[])(void) = { coin_inside_boo_act_0, coin_inside_boo_act_1 };
 
 void bhv_coin_inside_boo_loop(void) {
-    cur_obj_call_action_function(sCoinInsideBooActions);
+    CUR_OBJ_CALL_ACTION_FUNCTION(sCoinInsideBooActions);
 }
 
 void bhv_coin_sparkles_loop(void) {

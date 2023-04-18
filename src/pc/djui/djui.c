@@ -1,4 +1,10 @@
 #include "djui.h"
+#include "djui_panel.h"
+#include "djui_panel_main.h"
+#include "djui_panel_language.h"
+#include "djui_panel_pause.h"
+#include "djui_panel_join.h"
+#include "djui_panel_join_message.h"
 #include "../debuglog.h"
 #include "pc/cliopts.h"
 #include "game/level_update.h"
@@ -62,6 +68,10 @@ void djui_init(void) {
 
     if (gCLIOpts.Network != NT_SERVER) {
         djui_panel_main_create(NULL);
+        if (configLanguage[0] == '\0') {
+            gPanelLanguageOnStartup = true;
+            djui_panel_language_create(NULL);
+        }
         //djui_panel_debug_create();
     }
     djui_cursor_create();
@@ -88,6 +98,7 @@ void djui_render(void) {
     gDjuiHudUtilsZ = 0;
 
     create_dl_ortho_matrix();
+    djui_gfx_displaylist_begin();
 
     smlua_call_event_hooks(HOOK_ON_HUD_RENDER);
 
@@ -109,4 +120,5 @@ void djui_render(void) {
 
     djui_cursor_update();
     djui_interactable_update();
+    djui_gfx_displaylist_end();
 }

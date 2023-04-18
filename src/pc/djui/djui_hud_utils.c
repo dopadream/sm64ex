@@ -14,7 +14,9 @@
 #include "gfx_dimensions.h"
 #include "config.h"
 #include "djui.h"
+#include "djui_unicode.h"
 #include "djui_hud_utils.h"
+#include "djui_panel_pause.h"
 #include "game/camera.h"
 
 
@@ -89,6 +91,7 @@ struct InterpHud {
     f32 scaleH;
     f32 width;
     f32 height;
+    enum HudUtilsResolution resolution;
 };
 static struct InterpHud sInterpHuds[MAX_INTERP_HUD] = { 0 };
 static u16 sInterpHudCount = 0;
@@ -100,12 +103,14 @@ void patch_djui_hud_before(void) {
 void patch_djui_hud(f32 delta) {
     f32 savedZ = gDjuiHudUtilsZ;
     Gfx* savedHeadPos = gDisplayListHead;
+    enum HudUtilsResolution savedResolution = sResolution;
     for (u16 i = 0; i < sInterpHudCount; i++) {
         struct InterpHud* interp = &sInterpHuds[i];
         f32 x = delta_interpolate_f32(interp->prevX, interp->x, delta);
         f32 y = delta_interpolate_f32(interp->prevY, interp->y, delta);
         f32 scaleW = delta_interpolate_f32(interp->prevScaleW, interp->scaleW, delta);
         f32 scaleH = delta_interpolate_f32(interp->prevScaleH, interp->scaleH, delta);
+        sResolution = interp->resolution;
 
         gDjuiHudUtilsZ = interp->z;
         gDisplayListHead = interp->headPos;
@@ -123,6 +128,7 @@ void patch_djui_hud(f32 delta) {
         djui_hud_size_translate(&translatedH);
         create_dl_scale_matrix(DJUI_MTX_NOPUSH, interp->width * translatedW, interp->height * translatedH, 1.0f);
     }
+    sResolution = savedResolution;
     gDisplayListHead = savedHeadPos;
     gDjuiHudUtilsZ = savedZ;
 }
@@ -195,8 +201,8 @@ f32 djui_hud_measure_text(const char* message) {
     f32 width = 0;
     const char* c = message;
     while(*c != '\0') {
-        width += font->char_width(*c);
-        c++;
+        width += font->char_width((char*)c);
+        c = djui_unicode_next_char((char*)c);
     }
     return width * font->defaultFontScale;
 }
@@ -226,13 +232,13 @@ void djui_hud_print_text(const char* message, float x, float y, float scale) {
 
     // render the line
     f32 addX = 0;
-    size_t length = strlen(message);
-    for (size_t i = 0; i < length; i++) {
-        char c = message[i];
+    char* c = (char*)message;
+    while (*c != '\0') {
         f32 charWidth = font->char_width(c);
 
-        if (c == '\n' && c == ' ') {
+        if (*c == '\n' && *c == ' ') {
             addX += charWidth;
+            c++;
             continue;
         }
 
@@ -240,6 +246,8 @@ void djui_hud_print_text(const char* message, float x, float y, float scale) {
         font->render_char(c);
         create_dl_translation_matrix(DJUI_MTX_NOPUSH, charWidth + addX, 0, 0);
         addX = 0;
+
+        c = djui_unicode_next_char(c);
     }
 
     // pop
@@ -322,6 +330,7 @@ void djui_hud_render_texture_interpolated(struct TextureInfo* texInfo, f32 prevX
     interp->width = texInfo->width;
     interp->height = texInfo->height;
     interp->z = savedZ;
+    interp->resolution = sResolution;
 }
 
 void djui_hud_render_texture_tile_interpolated(struct TextureInfo* texInfo, f32 prevX, f32 prevY, f32 prevScaleW, f32 prevScaleH, f32 x, f32 y, f32 scaleW, f32 scaleH, u32 tileX, u32 tileY, u32 tileW, u32 tileH) {

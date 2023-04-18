@@ -1,5 +1,11 @@
 #include <stdio.h>
 #include "djui.h"
+#include "djui_panel.h"
+#include "djui_panel_menu.h"
+#include "djui_panel_host_mods.h"
+#include "djui_panel_host_settings.h"
+#include "djui_panel_host_save.h"
+#include "djui_panel_host_message.h"
 #include "game/save_file.h"
 #include "pc/network/network.h"
 #include "pc/utils/misc.h"
@@ -56,109 +62,97 @@ static void djui_panel_host_do_host(struct DjuiBase* caller) {
     }
     
     configHostPort = atoi(sInputboxPort->buffer);
-    djui_panel_host_message_create(caller);
+
+    if (gNetworkType == NT_SERVER) {
+        network_rehost_begin();
+    } else {
+        djui_panel_host_message_create(caller);
+    }
 }
 
 void djui_panel_host_create(struct DjuiBase* caller) {
-    f32 bodyHeight = 32 * 4 + 64 * 4 + 16 * 5;
-
     struct DjuiBase* defaultBase = NULL;
-    struct DjuiThreePanel* panel = djui_panel_menu_create(bodyHeight, "\\#ff0800\\H\\#1be700\\O\\#00b3ff\\S\\#ffef00\\T");
-    struct DjuiFlowLayout* body = (struct DjuiFlowLayout*)djui_three_panel_get_body(panel);
+    struct DjuiThreePanel* panel = djui_panel_menu_create((gNetworkType == NT_SERVER)
+            ? DLANG(HOST, SERVER_TITLE)
+            : DLANG(HOST, HOST_TITLE));
+    struct DjuiBase* body = djui_three_panel_get_body(panel);
     {
 #ifdef DISCORD_SDK
-        char* nChoices[2] = { "Discord", "Direct Connection" };
-        struct DjuiSelectionbox* selectionbox1 = djui_selectionbox_create(&body->base, "Network system", nChoices, 2, &configNetworkSystem);
-        djui_base_set_size_type(&selectionbox1->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&selectionbox1->base, 1.0f, 32);
-        djui_interactable_hook_value_change(&selectionbox1->base, djui_panel_host_network_system_change);
+        char* nChoices[2] = { DLANG(HOST, DISCORD), DLANG(HOST, DIRECT_CONNECTION) };
+        struct DjuiSelectionbox* selectionbox1 = djui_selectionbox_create(body, DLANG(HOST, NETWORK_SYSTEM), nChoices, 2, &configNetworkSystem, djui_panel_host_network_system_change);
+        if (gNetworkType == NT_SERVER) {
+            djui_base_set_enabled(&selectionbox1->base, false);
+        }
+
 #endif
 
-        struct DjuiRect* rect1 = djui_rect_create(&body->base);
-        djui_base_set_size_type(&rect1->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&rect1->base, 1.0f, 32);
-        djui_base_set_color(&rect1->base, 0, 0, 0, 0);
+        struct DjuiRect* rect1 = djui_rect_container_create(body, 32);
         {
-            struct DjuiText* text1 = djui_text_create(&rect1->base, "Port");
+            struct DjuiText* text1 = djui_text_create(&rect1->base, DLANG(HOST, PORT));
             djui_base_set_size_type(&text1->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
             djui_base_set_color(&text1->base, 200, 200, 200, 255);
-            djui_base_set_size(&text1->base, 0.485f, 64);
+            djui_base_set_size(&text1->base, 0.585f, 64);
             djui_base_set_alignment(&text1->base, DJUI_HALIGN_LEFT, DJUI_VALIGN_TOP);
+            if (gNetworkType == NT_SERVER) {
+                djui_base_set_enabled(&text1->base, false);
+            }
 
             struct DjuiInputbox* inputbox1 = djui_inputbox_create(&rect1->base, 32);
             djui_base_set_size_type(&inputbox1->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-            djui_base_set_size(&inputbox1->base, 0.5f, 32);
+            djui_base_set_size(&inputbox1->base, 0.4f, 32);
             djui_base_set_alignment(&inputbox1->base, DJUI_HALIGN_RIGHT, DJUI_VALIGN_TOP);
             char portString[32] = { 0 };
             snprintf(portString, 32, "%d", configHostPort);
             djui_inputbox_set_text(inputbox1, portString);
             djui_interactable_hook_value_change(&inputbox1->base, djui_panel_host_port_text_change);
+            if (gNetworkType == NT_SERVER) {
+                djui_base_set_enabled(&inputbox1->base, false);
 #ifdef DISCORD_SDK
-            djui_base_set_enabled(&inputbox1->base, DJUI_HOST_NS_IS_SOCKET);
+            } else {
+                djui_base_set_enabled(&inputbox1->base, DJUI_HOST_NS_IS_SOCKET);
 #endif
+            }
             sInputboxPort = inputbox1;
         }
         
-        struct DjuiRect* rect2 = djui_rect_create(&body->base);
-        djui_base_set_size_type(&rect2->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&rect2->base, 1.0f, 32);
-        djui_base_set_color(&rect2->base, 0, 0, 0, 0);
+        struct DjuiRect* rect2 = djui_rect_container_create(body, 32);
         {
-            struct DjuiText* text1 = djui_text_create(&rect2->base, "Save Slot");
+            struct DjuiText* text1 = djui_text_create(&rect2->base, DLANG(HOST, SAVE_SLOT));
             djui_base_set_size_type(&text1->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
             djui_base_set_color(&text1->base, 200, 200, 200, 255);
-            djui_base_set_size(&text1->base, 0.485f, 64);
+            djui_base_set_size(&text1->base, 0.585f, 64);
             djui_base_set_alignment(&text1->base, DJUI_HALIGN_LEFT, DJUI_VALIGN_TOP);
 
             char starString[32] = { 0 };
             snprintf(starString, 32, "%c x%d", '~' + 1, save_file_get_total_star_count(configHostSaveSlot - 1, 0, 24));
-            struct DjuiButton* button1 = djui_button_create(&rect2->base, starString);
-            djui_base_set_size_type(&button1->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-            djui_base_set_size(&button1->base, 0.5f, 32);
+            struct DjuiButton* button1 = djui_button_create(&rect2->base, starString, DJUI_BUTTON_STYLE_NORMAL, djui_panel_host_save_create);
+            djui_base_set_size(&button1->base, 0.4f, 32);
             djui_base_set_alignment(&button1->base, DJUI_HALIGN_RIGHT, DJUI_VALIGN_TOP);
-            djui_interactable_hook_click(&button1->base, djui_panel_host_save_create);
         }
 
-        struct DjuiButton* button1 = djui_button_create(&body->base, "Settings");
-        djui_base_set_size_type(&button1->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&button1->base, 1.0f, 64);
-        djui_base_set_alignment(&button1->base, DJUI_HALIGN_CENTER, DJUI_VALIGN_TOP);
-        djui_interactable_hook_click(&button1->base, djui_panel_host_settings_create);
+        djui_button_create(body, DLANG(HOST, SETTINGS), DJUI_BUTTON_STYLE_NORMAL, djui_panel_host_settings_create);
 
-        struct DjuiButton* button2 = djui_button_create(&body->base, "Mods");
-        djui_base_set_size_type(&button2->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&button2->base, 1.0f, 64);
-        djui_base_set_alignment(&button2->base, DJUI_HALIGN_CENTER, DJUI_VALIGN_TOP);
-        djui_interactable_hook_click(&button2->base, djui_panel_host_mods_create);
+        struct DjuiButton* button2 = djui_button_create(body, DLANG(HOST, MODS), DJUI_BUTTON_STYLE_NORMAL, djui_panel_host_mods_create);
         button2->base.tag = 0;
 
-        struct DjuiButton* button3 = djui_button_create(&body->base, "Rom-Hacks");
-        djui_base_set_size_type(&button3->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&button3->base, 1.0f, 64);
-        djui_base_set_alignment(&button3->base, DJUI_HALIGN_CENTER, DJUI_VALIGN_TOP);
-        djui_interactable_hook_click(&button3->base, djui_panel_host_mods_create);
+        struct DjuiButton* button3 = djui_button_create(body, DLANG(HOST, ROMHACKS), DJUI_BUTTON_STYLE_NORMAL, djui_panel_host_mods_create);
         button3->base.tag = 1;
 
-        struct DjuiRect* rect3 = djui_rect_create(&body->base);
-        djui_base_set_size_type(&rect3->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&rect3->base, 1.0f, 64);
-        djui_base_set_color(&rect3->base, 0, 0, 0, 0);
+        struct DjuiRect* rect3 = djui_rect_container_create(body, 64);
         {
-            struct DjuiButton* button1 = djui_button_create(&rect3->base, "Back");
-            djui_base_set_size_type(&button1->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
+            struct DjuiButton* button1 = djui_button_create(&rect3->base, (gNetworkType == NT_SERVER) ? DLANG(MENU, CANCEL) : DLANG(MENU, BACK), DJUI_BUTTON_STYLE_BACK, djui_panel_menu_back);
             djui_base_set_size(&button1->base, 0.485f, 64);
             djui_base_set_alignment(&button1->base, DJUI_HALIGN_LEFT, DJUI_VALIGN_TOP);
-            djui_button_set_style(button1, 1);
-            djui_interactable_hook_click(&button1->base, djui_panel_menu_back);
 
-            struct DjuiButton* button2 = djui_button_create(&rect3->base, "Host");
-            djui_base_set_size_type(&button2->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
+            struct DjuiButton* button2 = djui_button_create(&rect3->base, (gNetworkType == NT_SERVER) ? DLANG(HOST, APPLY) : DLANG(HOST, HOST), DJUI_BUTTON_STYLE_NORMAL, djui_panel_host_do_host);
             djui_base_set_size(&button2->base, 0.485f, 64);
             djui_base_set_alignment(&button2->base, DJUI_HALIGN_RIGHT, DJUI_VALIGN_TOP);
-            djui_interactable_hook_click(&button2->base, djui_panel_host_do_host);
-            defaultBase = &button2->base;
+
+            defaultBase = (gNetworkType == NT_SERVER)
+                        ? &button1->base
+                        : &button2->base;
         }
     }
 
-    djui_panel_add(caller, &panel->base, defaultBase);
+    djui_panel_add(caller, panel, defaultBase);
 }

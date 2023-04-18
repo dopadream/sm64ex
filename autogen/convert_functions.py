@@ -37,6 +37,7 @@ in_files = [
     "src/game/sound_init.h",
     "src/pc/djui/djui_hud_utils.h",
     "src/pc/network/network_player.h",
+    "src/pc/network/lag_compensation.h",
     "include/behavior_table.h",
     "src/pc/lua/utils/smlua_obj_utils.h",
     "src/pc/lua/utils/smlua_misc_utils.h",
@@ -91,7 +92,7 @@ override_disallowed_functions = {
     "src/game/interaction.h":              [ "process_interactions", "_handle_" ],
     "src/game/sound_init.h":               [ "_loop_", "thread4_", "set_sound_mode" ],
     "src/pc/network/network_utils.h":      [ "network_get_player_text_color[^_]" ],
-    "src/pc/network/network_player.h":     [ "_init", "_connected[^_]", "_shutdown", "_disconnected", "_update" ],
+    "src/pc/network/network_player.h":     [ "_init", "_connected[^_]", "_shutdown", "_disconnected", "_update", "construct_player_popup" ],
     "src/game/object_helpers.c":           [ "spawn_obj", "^bhv_", "abs[fi]", "^bit_shift", "_debug$", "^stub_", "_set_model" ],
     "src/game/obj_behaviors.c":            [ "debug_" ],
     "src/game/obj_behaviors_2.c":          [ "wiggler_jumped_on_attack_handler", "huge_goomba_weakly_attacked" ],
@@ -102,6 +103,7 @@ override_disallowed_functions = {
     "src/pc/lua/utils/smlua_audio_utils.h": [ "smlua_audio_utils_override", "audio_custom_shutdown"],
     "src/pc/djui/djui_hud_utils.h":         [ "djui_hud_render_texture", "djui_hud_render_texture_raw", "djui_hud_render_texture_tile", "djui_hud_render_texture_tile_raw" ],
     "src/pc/lua/utils/smlua_level_utils.h": [ "smlua_level_util_reset" ],
+    "src/pc/network/lag_compensation.h":    [ "lag_compensation_clear", "lag_compensation_store" ],
 }
 
 lua_function_params = {

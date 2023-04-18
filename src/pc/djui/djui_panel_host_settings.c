@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include "djui.h"
+#include "djui_panel.h"
+#include "djui_panel_menu.h"
 #include "game/save_file.h"
 #include "pc/network/network.h"
 #include "pc/utils/misc.h"
@@ -43,61 +45,37 @@ static void djui_panel_host_player_text_change(struct DjuiBase* caller) {
 }
 
 void djui_panel_host_settings_create(struct DjuiBase* caller) {
-    f32 bodyHeight = 32 * 8 + 64 * 1 + 16 * 8;
-
-    struct DjuiBase* defaultBase = NULL;
-    struct DjuiThreePanel* panel = djui_panel_menu_create(bodyHeight, "\\#ff0800\\S\\#1be700\\E\\#00b3ff\\T\\#ffef00\\T\\#ff0800\\I\\#1be700\\N\\#00b3ff\\G\\#ffef00\\S");
-    struct DjuiFlowLayout* body = (struct DjuiFlowLayout*)djui_three_panel_get_body(panel);
+    struct DjuiThreePanel* panel = djui_panel_menu_create(DLANG(HOST_SETTINGS, SETTINGS));
+    struct DjuiBase* body = djui_three_panel_get_body(panel);
     {
-        char* iChoices[3] = { "Non-solid", "Solid", "Friendly Fire" };
-        struct DjuiSelectionbox* selectionbox1 = djui_selectionbox_create(&body->base, "Player interaction", iChoices, 3, &configPlayerInteraction);
-        djui_base_set_size_type(&selectionbox1->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&selectionbox1->base, 1.0f, 32);
+        char* iChoices[3] = { DLANG(HOST_SETTINGS, NONSOLID), DLANG(HOST_SETTINGS, SOLID), DLANG(HOST_SETTINGS, FRIENDLY_FIRE) };
+        djui_selectionbox_create(body, DLANG(HOST_SETTINGS, PLAYER_INTERACTION), iChoices, 3, &configPlayerInteraction, NULL);
 
-        char* kChoices[3] = { "Weak", "Normal", "Too much" };
         sKnockbackIndex = (configPlayerKnockbackStrength <= 20)
                         ? 0
                         : ((configPlayerKnockbackStrength <= 40) ? 1 : 2);
-        struct DjuiSelectionbox* selectionbox2 = djui_selectionbox_create(&body->base, "Knockback strength", kChoices, 3, &sKnockbackIndex);
-        djui_base_set_size_type(&selectionbox2->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&selectionbox2->base, 1.0f, 32);
-        djui_interactable_hook_value_change(&selectionbox2->base, djui_panel_host_settings_knockback_change);
+        char* kChoices[3] = { DLANG(HOST_SETTINGS, WEAK), DLANG(HOST_SETTINGS, NORMAL), DLANG(HOST_SETTINGS, TOO_MUCH) };
+        djui_selectionbox_create(body, DLANG(HOST_SETTINGS, KNOCKBACK_STRENGTH), kChoices, 3, &sKnockbackIndex, djui_panel_host_settings_knockback_change);
 
-        char* lChoices[3] = { "Leave level", "Stay in level", "Non-stop" };
-        struct DjuiSelectionbox* selectionbox3 = djui_selectionbox_create(&body->base, "On star collection", lChoices, 3, &configStayInLevelAfterStar);
-        djui_base_set_size_type(&selectionbox3->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&selectionbox3->base, 1.0f, 32);
+        char* lChoices[3] = { DLANG(HOST_SETTINGS, LEAVE_LEVEL), DLANG(HOST_SETTINGS, STAY_IN_LEVEL), DLANG(HOST_SETTINGS, NONSTOP) };
+        djui_selectionbox_create(body, DLANG(HOST_SETTINGS, ON_STAR_COLLECTION), lChoices, 3, &configStayInLevelAfterStar, NULL);
 
-        struct DjuiCheckbox* checkbox2 = djui_checkbox_create(&body->base, "Skip intro cutscene", &configSkipIntro);
-        djui_base_set_size_type(&checkbox2->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&checkbox2->base, 1.0f, 32);
+        djui_checkbox_create(body, DLANG(HOST_SETTINGS, SKIP_INTRO_CUTSCENE), &configSkipIntro, NULL);
+        djui_checkbox_create(body, DLANG(HOST_SETTINGS, SHARE_LIVES), &configShareLives, NULL);
+        djui_checkbox_create(body, DLANG(HOST_SETTINGS, ENABLE_CHEATS), &configEnableCheats, NULL);
+        djui_checkbox_create(body, DLANG(HOST_SETTINGS, BUBBLE_ON_DEATH), &configBubbleDeath, NULL);
 
-        struct DjuiCheckbox* checkbox3 = djui_checkbox_create(&body->base, "Share lives", &configShareLives);
-        djui_base_set_size_type(&checkbox3->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&checkbox3->base, 1.0f, 32);
-
-        struct DjuiCheckbox* checkbox4 = djui_checkbox_create(&body->base, "Enable cheats", &configEnableCheats);
-        djui_base_set_size_type(&checkbox4->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&checkbox4->base, 1.0f, 32);
-
-        struct DjuiCheckbox* checkbox5 = djui_checkbox_create(&body->base, "Bubble on death", &configBubbleDeath);
-        djui_base_set_size_type(&checkbox5->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&checkbox5->base, 1.0f, 32);
-
-        struct DjuiRect* rect1 = djui_rect_create(&body->base);
-        djui_base_set_size_type(&rect1->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&rect1->base, 1.0f, 32);
-        djui_base_set_color(&rect1->base, 0, 0, 0, 0);
+        struct DjuiRect* rect1 = djui_rect_container_create(body, 32);
         {
-            struct DjuiText* text1 = djui_text_create(&rect1->base, "Amount of players");
+            struct DjuiText* text1 = djui_text_create(&rect1->base, DLANG(HOST_SETTINGS, AMOUNT_OF_PLAYERS));
             djui_base_set_size_type(&text1->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
             djui_base_set_color(&text1->base, 200, 200, 200, 255);
-            djui_base_set_size(&text1->base, 0.485f, 64);
+            djui_base_set_size(&text1->base, 0.585f, 64);
             djui_base_set_alignment(&text1->base, DJUI_HALIGN_LEFT, DJUI_VALIGN_TOP);
 
             struct DjuiInputbox* inputbox1 = djui_inputbox_create(&rect1->base, 32);
             djui_base_set_size_type(&inputbox1->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-            djui_base_set_size(&inputbox1->base, 0.5f, 32);
+            djui_base_set_size(&inputbox1->base, 0.4f, 32);
             djui_base_set_alignment(&inputbox1->base, DJUI_HALIGN_RIGHT, DJUI_VALIGN_TOP);
             char limitString[32] = { 0 };
             snprintf(limitString, 32, "%d", configAmountofPlayers);
@@ -106,11 +84,7 @@ void djui_panel_host_settings_create(struct DjuiBase* caller) {
             sPlayerAmount = inputbox1;
         }
         
-        struct DjuiButton* button1 = djui_button_create(&body->base, "Back");
-        djui_base_set_size_type(&button1->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&button1->base, 1.0f, 64);
-        djui_button_set_style(button1, 1);
-        djui_interactable_hook_click(&button1->base, djui_panel_menu_back);
+        djui_button_create(body, DLANG(MENU, BACK), DJUI_BUTTON_STYLE_BACK, djui_panel_menu_back);
     }
-    djui_panel_add(caller, &panel->base, defaultBase);
+    djui_panel_add(caller, panel, NULL);
 }

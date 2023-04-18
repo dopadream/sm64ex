@@ -13,6 +13,11 @@
 #include "PR/os_eeprom.h"
 #include "pc/network/version.h"
 #include "pc/djui/djui.h"
+#include "pc/djui/djui_panel.h"
+#include "pc/djui/djui_panel_modlist.h"
+#include "pc/djui/djui_panel_playerlist.h"
+#include "pc/djui/djui_panel_menu.h"
+#include "pc/djui/djui_panel_join_message.h"
 #include "pc/cheats.h"
 #include "pc/utils/string_builder.h"
 //#define DISABLE_MODULE_LOG 1
@@ -180,8 +185,6 @@ void network_receive_join(struct Packet* p) {
     packet_read(p, &gServerSettings.headlessServer, sizeof(u8));
     packet_read(p, eeprom, sizeof(u8) * 512);
     packet_read(p, &modCount, sizeof(u8));
-
-    Cheats.enabled = gServerSettings.enableCheats;
 
     struct StringLinkedList head = { 0 };
     for (s32 i = 0; i < modCount; i++) {

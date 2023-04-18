@@ -35,7 +35,14 @@ static void remove_node_from_list(struct PacketLinkedList* node) {
 }
 
 void network_forget_all_reliable(void) {
-    while (head != NULL) { remove_node_from_list(head); }
+    struct PacketLinkedList* node = head;
+    while (node != NULL) {
+        struct PacketLinkedList* next = node->next;
+        if (!node->p.keepSendingAfterDisconnect) {
+            remove_node_from_list(head);
+        }
+        node = next;
+    }
 }
 
 void network_forget_all_reliable_from(u8 localIndex) {
@@ -44,7 +51,9 @@ void network_forget_all_reliable_from(u8 localIndex) {
     while (node != NULL) {
         struct PacketLinkedList* next = node->next;
         if (node->p.localIndex == localIndex) {
-            remove_node_from_list(node);
+            if (!node->p.keepSendingAfterDisconnect) {
+                remove_node_from_list(node);
+            }
         }
         node = next;
     }
@@ -126,7 +135,7 @@ static float adjust_max_elapsed(enum PacketType packetType, float maxElapsed) {
         case PACKET_MOD_LIST_ENTRY:
         case PACKET_MOD_LIST_FILE:
         case PACKET_MOD_LIST_DONE:
-            return MIN(0.2f + maxElapsed * 2.0f, 5);
+            return MIN(0.5f + maxElapsed * 2.0f, 5);
         default:
             return MIN(maxElapsed, 5);
     }
@@ -143,9 +152,17 @@ static float get_max_elapsed_time(int sendAttempts) {
 void network_update_reliable(void) {
     struct PacketLinkedList* node = head;
     while (node != NULL) {
-        float elapsed = (clock_elapsed() - node->lastSend);
-        float maxElapsed = get_max_elapsed_time(node->sendAttempts);
+        f32 elapsed = (clock_elapsed() - node->lastSend);
+        f32 maxElapsed = get_max_elapsed_time(node->sendAttempts);
         maxElapsed = adjust_max_elapsed(node->p.packetType, maxElapsed);
+
+        // adjust resend time based on ping
+        struct NetworkPlayer* np = &gNetworkPlayers[node->p.localIndex];
+        f32 pingElapsed = np->ping / 1000.0f;
+        if (pingElapsed > 1.0f) { pingElapsed = 1.0f; }
+        pingElapsed *= 1.1f;
+        if (maxElapsed < pingElapsed) { maxElapsed = pingElapsed; }
+
         if (elapsed > maxElapsed) {
             if (node->p.packetType == PACKET_JOIN_REQUEST && gNetworkPlayerServer != NULL) {
                 node->p.localIndex = gNetworkPlayerServer->localIndex;

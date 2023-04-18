@@ -29,7 +29,7 @@ static void discord_sdk_log_callback(UNUSED void* hook_data, enum EDiscordLogLev
 
 void discord_fatal_message(int rc) { // Discord usually does this because of loss of connection to Discord
     char errorMessage[132] = { 0 };
-    snprintf(errorMessage, 132, "Discord threw an error.\nTo fix, try: \n1. Close the game.\n2. Restart Discord.\n3. Start the game.\nRC: %d", rc);
+    snprintf(errorMessage, 132, "%s\nRC: %d", DLANG(NOTIF, DISCORD_ERROR), rc);
     djui_popup_create(errorMessage, 6);
 }
 
@@ -107,6 +107,7 @@ static void ns_discord_update(void) {
 }
 
 static bool ns_discord_initialize(enum NetworkType networkType) {
+    if (gDiscordReconnecting) { return true; }
 #ifdef DEBUG
     set_instance_env_variable();
 #endif
@@ -140,7 +141,7 @@ static bool ns_discord_initialize(enum NetworkType networkType) {
             DISCORD_REQUIRE(rc);
         } else if (rc) {
             LOGFILE_ERROR(LFT_DISCORD, "DiscordCreate failed: %d", rc);
-            djui_popup_create("\\#ffa0a0\\Error:\\#c8c8c8\\ Could not detect Discord.\n\\#a0a0a0\\Try closing the game, restarting Discord, and opening the game again.", 3);
+            djui_popup_create(DLANG(NOTIF, DISCORD_DETECT), 3);
             gDiscordFailed = true;
             return false;
         }
@@ -179,6 +180,7 @@ static bool ns_discord_initialize(enum NetworkType networkType) {
 }
 
 static void ns_discord_shutdown(void) {
+    if (gDiscordReconnecting) { return; }
     if (!gDiscordInitialized) { return; }
     discord_lobby_leave();
     gActivityLock = false;

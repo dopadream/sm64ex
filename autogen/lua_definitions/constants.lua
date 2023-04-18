@@ -3250,7 +3250,10 @@ FONT_MENU = 1
 FONT_HUD = 2
 
 --- @type DjuiFontType
-FONT_COUNT = 3
+FONT_TINY = 3
+
+--- @type DjuiFontType
+FONT_COUNT = 4
 
 --- @class HudUtilsResolution
 
@@ -4739,6 +4742,9 @@ PLAYER_INTERACTIONS_PVP = 2
 
 --- @type integer
 MAX_RX_SEQ_IDS = 64
+
+--- @type integer
+NETWORK_PLAYER_PING_TIMEOUT = 1
 
 --- @type integer
 NETWORK_PLAYER_TIMEOUT = 10
@@ -11452,6 +11458,9 @@ ANIM_FLAG_NOLOOP = (1 << 0)
 ANIM_FLAG_VERT_TRANS = (1 << 4)
 
 --- @type integer
+COOP_OBJ_FLAG_INITIALIZED = (1 << 3)
+
+--- @type integer
 COOP_OBJ_FLAG_LUA = (1 << 1)
 
 --- @type integer
@@ -11513,13 +11522,13 @@ MAX_LOCAL_VERSION_LENGTH = 12
 MAX_VERSION_LENGTH = 10
 
 --- @type integer
-MINOR_VERSION_NUMBER = 0
+MINOR_VERSION_NUMBER = 1
 
 --- @type integer
-PATCH_VERSION_NUMBER = 1
+PATCH_VERSION_NUMBER = 0
 
 --- @type integer
-VERSION_NUMBER = 32
+VERSION_NUMBER = 33
 
 --- @type string
 VERSION_TEXT = "beta"

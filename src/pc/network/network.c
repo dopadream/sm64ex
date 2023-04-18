@@ -8,11 +8,14 @@
 #include "src/game/scroll_targets.h"
 #ifdef DISCORD_SDK
 #include "discord/discord.h"
+#include "discord/activity.h"
 #endif
 #include "pc/configfile.h"
 #include "pc/cheats.h"
 #include "pc/djui/djui.h"
+#include "pc/djui/djui_panel.h"
 #include "pc/djui/djui_hud_utils.h"
+#include "pc/djui/djui_panel_main.h"
 #include "pc/utils/misc.h"
 #include "pc/lua/smlua.h"
 #include "pc/lua/utils/smlua_model_utils.h"
@@ -44,7 +47,7 @@ struct NetworkSystem* gNetworkSystem = &gNetworkSystemSocket;
 #endif
 
 #define LOADING_LEVEL_THRESHOLD 10
-#define MAX_PACKETS_PER_SECOND_PER_PLAYER ((u16)70)
+#define MAX_PACKETS_PER_SECOND_PER_PLAYER ((u16)100)
 
 u16 networkLoadingLevel = 0;
 bool gNetworkAreaLoaded = false;
@@ -54,10 +57,16 @@ u32 gNetworkAreaTimer = 0;
 void* gNetworkServerAddr = NULL;
 bool gNetworkSentJoin = false;
 u16 gNetworkRequestLocationTimer = 0;
+bool gDiscordReconnecting = false;
 
 u8 gDebugPacketIdBuffer[256] = { 0xFF };
 u8 gDebugPacketSentBuffer[256] = { 0 };
 u8 gDebugPacketOnBuffer = 0;
+
+u32 gNetworkStartupTimer = 0;
+u32 sNetworkReconnectTimer = 0;
+u32 sNetworkRehostTimer = 0;
+enum NetworkSystemType sNetworkReconnectType = NS_SOCKET;
 
 struct StringLinkedList gRegisteredMods = { 0 };
 
@@ -88,6 +97,7 @@ bool network_init(enum NetworkType inNetworkType) {
     // reset override hide hud
     extern u8 gOverrideHideHud;
     gOverrideHideHud = 0;
+    gNetworkStartupTimer = 5 * 30;
 
     // sanity check network system
     if (gNetworkSystem == NULL) {
@@ -111,7 +121,6 @@ bool network_init(enum NetworkType inNetworkType) {
 #else
     gServerSettings.headlessServer = 0;
 #endif
-    Cheats.enabled = gServerSettings.enableCheats;
 
     // initialize the network system
     gNetworkSentJoin = false;
@@ -145,6 +154,12 @@ bool network_init(enum NetworkType inNetworkType) {
             extern s16 gChangeLevelTransition;
             gChangeLevelTransition = gLevelValues.entryLevel;
         }
+
+#ifdef DISCORD_SDK
+    if (gNetworkSystem == &gNetworkSystemDiscord) {
+        discord_activity_update(true);
+    }
+#endif
 
         djui_chat_box_create();
     }
@@ -203,7 +218,9 @@ bool network_allow_unknown_local_index(enum PacketType packetType) {
         || (packetType == PACKET_DOWNLOAD_REQUEST)
         || (packetType == PACKET_DOWNLOAD)
         || (packetType == PACKET_KEEP_ALIVE)
-        || (packetType == PACKET_DEBUG_SYNC);
+        || (packetType == PACKET_DEBUG_SYNC)
+        || (packetType == PACKET_PING)
+        || (packetType == PACKET_PONG);
 }
 
 void network_send_to(u8 localIndex, struct Packet* p) {
@@ -211,6 +228,17 @@ void network_send_to(u8 localIndex, struct Packet* p) {
         LOG_ERROR("no data to send");
         return;
     }
+
+    // set destination
+    if (localIndex == PACKET_DESTINATION_SERVER) {
+        packet_set_destination(p, 0);
+        localIndex = (gNetworkPlayerServer != NULL) ? gNetworkPlayerServer->localIndex : 0;
+    } else {
+        packet_set_destination(p, p->requestBroadcast
+                                ? PACKET_DESTINATION_BROADCAST
+                                : gNetworkPlayers[(localIndex == 0) ? p->localIndex : localIndex].globalIndex);
+    }
+
     // sanity checks
     if (gNetworkType == NT_NONE) { LOG_ERROR("network type error none!"); return; }
     if (p->error) { LOG_ERROR("packet error!"); return; }
@@ -238,11 +266,6 @@ void network_send_to(u8 localIndex, struct Packet* p) {
 
     // set the flags again
     packet_set_flags(p);
-
-    // set destination
-    packet_set_destination(p, p->requestBroadcast
-                              ? PACKET_DESTINATION_BROADCAST
-                              : gNetworkPlayers[(localIndex == 0) ? p->localIndex : localIndex].globalIndex);
 
     p->localIndex = localIndex;
 
@@ -286,6 +309,9 @@ void network_send_to(u8 localIndex, struct Packet* p) {
 
     // send
     if (!tooManyPackets) {
+        if (p->keepSendingAfterDisconnect) {
+            localIndex = 0; // Force this type of packet to use the saved addr
+        }
         int rc = gNetworkSystem->send(localIndex, p->addr, p->buffer, p->cursor + sizeof(u32));
         if (rc == SOCKET_ERROR) { LOG_ERROR("send error %d", rc); return; }
     }
@@ -376,6 +402,81 @@ void* network_duplicate_address(u8 localIndex) {
     return gNetworkSystem->dup_addr(localIndex);
 }
 
+void network_reset_reconnect_and_rehost(void) {
+    gNetworkStartupTimer = 0;
+    sNetworkReconnectTimer = 0;
+    sNetworkRehostTimer = 0;
+    sNetworkReconnectType = NS_SOCKET;
+    gDiscordReconnecting = false;
+}
+
+void network_reconnect_begin(void) {
+    if (sNetworkReconnectTimer > 0) {
+        return;
+    }
+
+    sNetworkReconnectTimer = 2 * 30;
+
+#ifdef DISCORD_SDK
+    sNetworkReconnectType = (gNetworkSystem == &gNetworkSystemDiscord)
+                          ? NS_DISCORD
+                          : NS_SOCKET;
+#else
+    sNetworkReconnectType = NS_SOCKET;
+#endif
+
+    gDiscordReconnecting = true;
+    network_shutdown(false, false, false);
+    gDiscordReconnecting = false;
+
+    djui_connect_menu_open();
+}
+
+static void network_reconnect_update(void) {
+    if (sNetworkReconnectTimer <= 0) { return; }
+    if (--sNetworkReconnectTimer != 0) { return; }
+
+    if (sNetworkReconnectType == NS_SOCKET) {
+        network_set_system(NS_SOCKET);
+    }
+
+    gDiscordReconnecting = true;
+    network_init(NT_CLIENT);
+    gDiscordReconnecting = false;
+
+    network_send_mod_list_request();
+}
+
+bool network_is_reconnecting(void) {
+    return sNetworkReconnectTimer > 0;
+}
+
+void network_rehost_begin(void) {
+    for (int i = 1; i < MAX_PLAYERS; i++) {
+        struct NetworkPlayer* np = &gNetworkPlayers[i];
+        if (!np->connected) { continue; }
+
+        network_send_kick(i, EKT_REJOIN);
+        network_player_disconnected(i);
+    }
+
+    gDiscordReconnecting = true;
+    network_shutdown(false, false, false);
+    gDiscordReconnecting = false;
+
+    sNetworkRehostTimer = 2;
+}
+
+static void network_rehost_update(void) {
+    extern void djui_panel_do_host(void);
+    if (sNetworkRehostTimer <= 0) { return; }
+    if (--sNetworkRehostTimer != 0) { return; }
+
+    gDiscordReconnecting = true;
+    djui_panel_do_host();
+    gDiscordReconnecting = false;
+}
+
 static void network_update_area_timer(void) {
     bool brokenClock = false;
 #ifdef DEVELOPMENT
@@ -409,6 +510,14 @@ static void network_update_area_timer(void) {
 }
 
 void network_update(void) {
+
+    if (gNetworkStartupTimer > 0) {
+        gNetworkStartupTimer--;
+    }
+
+    network_rehost_update();
+    network_reconnect_update();
+
     // check for level loaded event
     if (networkLoadingLevel < LOADING_LEVEL_THRESHOLD) {
         networkLoadingLevel++;
@@ -440,6 +549,8 @@ void network_update(void) {
         network_update_reliable();
         packet_ordered_update();
     }
+
+    sync_objects_update();
 
     // update level/area request timers
     /*struct NetworkPlayer* np = gNetworkPlayerLocal;
@@ -496,7 +607,9 @@ void network_shutdown(bool sendLeaving, bool exiting, bool popup) {
     }
     gNetworkPlayerServer = NULL;
 
-    gNetworkType = NT_NONE;
+    if (sNetworkReconnectTimer <= 0 || sNetworkReconnectType != NS_DISCORD) {
+        gNetworkType = NT_NONE;
+    }
 
 
 #ifdef DISCORD_SDK

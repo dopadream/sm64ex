@@ -9,6 +9,7 @@
 #define UNKNOWN_GLOBAL_INDEX ((u8)-1)
 #define UNKNOWN_NETWORK_INDEX ((u64)-1)
 #define NETWORK_PLAYER_TIMEOUT 10
+#define NETWORK_PLAYER_PING_TIMEOUT 1
 #define MAX_RX_SEQ_IDS 64
 #define USE_REAL_PALETTE_VAR 0xFF
 
@@ -26,6 +27,7 @@ struct NetworkPlayer {
     u8 globalIndex;
     f32 lastReceived;
     f32 lastSent;
+    f32 lastPingSent;
     u16 currLevelAreaSeqId;
     s16 currCourseNum;
     s16 currActNum;
@@ -37,6 +39,7 @@ struct NetworkPlayer {
     u8 fadeOpacity;
     u8 onRxSeqId;
     u8 modelIndex;
+    u32 ping;
     struct PlayerPalette palette;
     char name[MAX_PLAYER_STRING+1];
 
@@ -80,6 +83,7 @@ void network_player_update(void);
 
 u8 network_player_connected(enum NetworkPlayerType type, u8 globalIndex, u8 modelIndex, const struct PlayerPalette* playerPalette, char* name);
 u8 network_player_disconnected(u8 globalIndex);
+void construct_player_popup(struct NetworkPlayer* np, char* msg, const char* level);
 
 void network_player_update_course_level(struct NetworkPlayer* np, s16 courseNum, s16 actNum, s16 levelNum, s16 areaIndex);
 void network_player_shutdown(bool popup);

@@ -51,7 +51,8 @@ static struct Object* spawn_object_internal(enum BehaviorId behaviorId, enum Mod
     obj->oHomeY = y;
     obj->oHomeZ = z;
 
-    obj->coopFlags = COOP_OBJ_FLAG_LUA;
+    obj->coopFlags = COOP_OBJ_FLAG_LUA | (obj->coopFlags & COOP_OBJ_FLAG_INITIALIZED);
+
     if (!doSync) { obj->coopFlags |= COOP_OBJ_FLAG_NON_SYNC; }
 
     if (objSetupFunction != 0) {
@@ -67,6 +68,7 @@ static struct Object* spawn_object_internal(enum BehaviorId behaviorId, enum Mod
     if (doSync && so) {
         so->extendedModelId = modelId;
         so->o = obj;
+        so->behavior = (BehaviorScript*) behavior;
 
         struct Object* spawn_objects[] = { obj };
         u32 models[] = { loadedModelId };

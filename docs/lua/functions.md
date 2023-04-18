@@ -792,6 +792,11 @@
 
 <br />
 
+- lag_compensation.h
+   - [lag_compensation_get_local_state](functions-3.md#lag_compensation_get_local_state)
+
+<br />
+
 - level_info.h
    - [get_level_name](functions-3.md#get_level_name)
    - [get_level_name_ascii](functions-3.md#get_level_name_ascii)
@@ -1549,6 +1554,7 @@
    - [get_last_star_or_key](functions-4.md#get_last_star_or_key)
    - [get_lighting_dir](functions-4.md#get_lighting_dir)
    - [get_network_area_timer](functions-4.md#get_network_area_timer)
+   - [get_os_name](functions-4.md#get_os_name)
    - [get_skybox](functions-4.md#get_skybox)
    - [get_temp_s32_pointer](functions-4.md#get_temp_s32_pointer)
    - [get_time](functions-4.md#get_time)
@@ -1622,6 +1628,7 @@
    - [smlua_text_utils_course_acts_replace](functions-5.md#smlua_text_utils_course_acts_replace)
    - [smlua_text_utils_dialog_replace](functions-5.md#smlua_text_utils_dialog_replace)
    - [smlua_text_utils_extra_text_replace](functions-5.md#smlua_text_utils_extra_text_replace)
+   - [smlua_text_utils_get_language](functions-5.md#smlua_text_utils_get_language)
    - [smlua_text_utils_reset_all](functions-5.md#smlua_text_utils_reset_all)
    - [smlua_text_utils_secret_star_replace](functions-5.md#smlua_text_utils_secret_star_replace)
 

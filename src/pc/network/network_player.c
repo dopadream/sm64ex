@@ -2,7 +2,6 @@
 #include "types.h"
 #include "object_fields.h"
 #include "game/mario_misc.h"
-#include "reservation_area.h"
 #include "pc/djui/djui.h"
 #include "pc/debuglog.h"
 #include "pc/utils/misc.h"
@@ -11,6 +10,7 @@
 #include "game/hardcoded.h"
 #include "game/object_helpers.h"
 #include "pc/lua/smlua_hooks.h"
+#include "lag_compensation.h"
 
 struct NetworkPlayer gNetworkPlayers[MAX_PLAYERS] = { 0 };
 struct NetworkPlayer *gNetworkPlayerLocal = NULL;
@@ -22,6 +22,7 @@ void network_player_init(void) {
     gNetworkPlayers[0].palette = configPlayerPalette;
     gNetworkPlayers[0].overrideModelIndex = gNetworkPlayers[0].modelIndex;
     gNetworkPlayers[0].overridePalette = gNetworkPlayers[0].palette;
+    lag_compensation_clear();
 }
 
 void network_player_update_model(u8 localIndex) {
@@ -147,6 +148,8 @@ void network_player_palette_to_color(struct NetworkPlayer *np, enum PlayerParts 
 }
 
 void network_player_update(void) {
+    lag_compensation_store();
+
     for (s32 i = 0; i < MAX_PLAYERS; i++) {
         struct NetworkPlayer *np = &gNetworkPlayers[i];
         if (!np->connected && i > 0) { continue; }
@@ -155,6 +158,17 @@ void network_player_update(void) {
     }
 
     if (!network_player_any_connected()) { return; }
+
+
+    for (s32 i = 1; i < MAX_PLAYERS; i++) {
+        struct NetworkPlayer *np = &gNetworkPlayers[i];
+        if (!np->connected && i > 0) { continue; }
+        float elapsed = (clock_elapsed() - np->lastPingSent);
+        if (elapsed > NETWORK_PLAYER_PING_TIMEOUT) {
+            network_send_ping(np);
+        }
+        //LOG_INFO("Ping %s: %u", np->name, np->ping / 2);
+    }
 
     if (gNetworkType == NT_SERVER) {
         for (s32 i = 1; i < MAX_PLAYERS; i++) {
@@ -240,6 +254,7 @@ u8 network_player_connected(enum NetworkPlayerType type, u8 globalIndex, u8 mode
     np->type = type;
     np->localIndex = localIndex;
     np->globalIndex = globalIndex;
+    np->ping = 50;
     if ((type != NPT_LOCAL) && (gNetworkType == NT_SERVER || type == NPT_SERVER)) { gNetworkSystem->save_id(localIndex, 0); }
     network_player_set_description(np, NULL, 0, 0, 0, 0);
 
@@ -290,10 +305,7 @@ u8 network_player_connected(enum NetworkPlayerType type, u8 globalIndex, u8 mode
 
     // display connected popup
     if (!gCurrentlyJoining && type != NPT_SERVER && (gNetworkType != NT_SERVER || type != NPT_LOCAL)) {
-        char *playerColorString = network_get_player_text_color_string(np->localIndex);
-        char popupMsg[128] = { 0 };
-        snprintf(popupMsg, 128, "%s%s\\#dcdcdc\\ connected", playerColorString, np->name);
-        djui_popup_create(popupMsg, 1);
+        construct_player_popup(np, DLANG(NOTIF, CONNECTED), NULL);
     }
     LOG_INFO("player connected, local %d, global %d", localIndex, np->globalIndex);
 
@@ -340,13 +352,9 @@ u8 network_player_disconnected(u8 globalIndex) {
         LOG_INFO("player disconnected, local %d, global %d", i, globalIndex);
 
         // display popup
-        char *playerColorString = network_get_player_text_color_string(np->localIndex);
-        char popupMsg[128] = { 0 };
-        snprintf(popupMsg, 128, "%s%s\\#dcdcdc\\ disconnected", playerColorString, np->name);
-        djui_popup_create(popupMsg, 1);
+        construct_player_popup(np, DLANG(NOTIF, DISCONNECTED), NULL);
 
         packet_ordered_clear(globalIndex);
-        reservation_area_change(np);
 
         smlua_call_event_hooks_mario_param(HOOK_ON_PLAYER_DISCONNECTED, &gMarioStates[i]);
 
@@ -357,6 +365,20 @@ u8 network_player_disconnected(u8 globalIndex) {
     return UNKNOWN_GLOBAL_INDEX;
 }
 
+void construct_player_popup(struct NetworkPlayer* np, char* msg, const char* level) {
+    char built[256] = { 0 };
+    snprintf(built, 256, "\\#dcdcdc\\");
+
+    char player[128] = { 0 };
+    snprintf(player, 128, "%s%s\\#dcdcdc\\", network_get_player_text_color_string(np->localIndex), np->name);
+    if (level) {
+        djui_language_replace2(msg, &built[9], 256 - 9, '@', player, '#', (char*)level);
+    } else {
+        djui_language_replace(msg, &built[9], 256 - 9, '@', player);
+    }
+    djui_popup_create(built, 1);
+}
+
 void network_player_update_course_level(struct NetworkPlayer* np, s16 courseNum, s16 actNum, s16 levelNum, s16 areaIndex) {
     // prevent sync valid packets from corrupting areaIndex
     if (areaIndex == -1) {
@@ -365,23 +387,16 @@ void network_player_update_course_level(struct NetworkPlayer* np, s16 courseNum,
 
     // display popup
     bool inCredits = (np->currActNum == 99);
-    
+
     if (np->currCourseNum != courseNum && np->localIndex != 0 && !inCredits) {
-        char *playerColorString = network_get_player_text_color_string(np->localIndex);
-        char popupMsg[128] = { 0 };
         bool matchingLocal = (np->currCourseNum == gNetworkPlayerLocal->currCourseNum) && (np->currActNum == gNetworkPlayerLocal->currActNum);
-        
+
         if (matchingLocal && gNetworkPlayerLocal->currCourseNum != 0) {
-            snprintf(popupMsg, 128, "%s%s\\#dcdcdc\\ left this level", playerColorString, np->name);
+            construct_player_popup(np, DLANG(NOTIF, LEFT_THIS_LEVEL), NULL);
         } else if (matchingLocal && gNetworkPlayerLocal->currCourseNum != 0) {
-            snprintf(popupMsg, 128, "%s%s\\#dcdcdc\\ entered this level", playerColorString, np->name);
+            construct_player_popup(np, DLANG(NOTIF, ENTERED_THIS_LEVEL), NULL);
         } else {
-            snprintf(popupMsg, 128, "%s%s\\#dcdcdc\\ entered\n%s", playerColorString, np->name, get_level_name(courseNum, levelNum, areaIndex));
-        }
-        
-        // display popup
-        if (configDisablePopups == 0) {
-            djui_popup_create(popupMsg, 1);
+            construct_player_popup(np, DLANG(NOTIF, ENTERED), get_level_name(courseNum, levelNum, areaIndex));
         }
     }
 
@@ -437,6 +452,6 @@ void network_player_shutdown(bool popup) {
         gNetworkSystem->clear_id(i);
     }
 
-    if (popup) { djui_popup_create("\\#ffa0a0\\Disconnected:\\#dcdcdc\\ server closed", 1); }
+    if (popup) { djui_popup_create(DLANG(NOTIF, SERVER_CLOSED), 1); }
     LOG_INFO("cleared all network players");
 }

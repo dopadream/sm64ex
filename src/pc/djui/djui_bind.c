@@ -64,28 +64,27 @@ struct DjuiBind* djui_bind_create(struct DjuiBase* parent, const char* message, 
     djui_base_set_size_type(&text->base, DJUI_SVT_RELATIVE, DJUI_SVT_RELATIVE);
     djui_base_set_size(&text->base, 0.3f, 1.0f);
     djui_text_set_alignment(text, DJUI_HALIGN_LEFT, DJUI_VALIGN_BOTTOM);
-    djui_text_set_drop_shadow(text, 120, 120, 120, 64);
+    djui_text_set_drop_shadow(text, 64, 64, 64, 100);
     djui_base_set_color(&text->base, 200, 200, 200, 255);
     bind->text = text;
 
     struct DjuiRect* rect = djui_rect_create(&bind->base);
     djui_base_set_alignment(&rect->base, DJUI_HALIGN_RIGHT, DJUI_VALIGN_CENTER);
     djui_base_set_size_type(&rect->base, DJUI_SVT_RELATIVE, DJUI_SVT_RELATIVE);
-    djui_base_set_size(&rect->base, 0.8f, 1.0f);
+    djui_base_set_size(&rect->base, 0.7f, 1.0f);
     djui_base_set_color(&rect->base, 0, 0, 0, 0);
     bind->rect = rect;
 
     for (int i = 0; i < MAX_BINDS; i++) {
 #if defined(CAPI_SDL1) || defined(CAPI_SDL2)
         unsigned int key = configKey[i];
-        struct DjuiButton* button = djui_button_create(&rect->base, translate_bind_to_name(key));
+        struct DjuiButton* button = djui_button_create(&rect->base, translate_bind_to_name(key), DJUI_BUTTON_STYLE_NORMAL, djui_bind_button_on_click);
 #else
-        struct DjuiButton* button = djui_button_create(&rect->base, "???");
+        struct DjuiButton* button = djui_button_create(&rect->base, "???", DJUI_BUTTON_STYLE_NORMAL, djui_bind_button_on_click);
 #endif
         djui_base_set_size_type(&button->base, DJUI_SVT_RELATIVE, DJUI_SVT_RELATIVE);
         djui_base_set_size(&button->base, 0.33f, 1.0f);
         button->base.tag = i;
-        djui_interactable_hook_click(&button->base, djui_bind_button_on_click);
         djui_interactable_hook_bind(&button->base, djui_bind_button_on_bind);
 
         enum DjuiHAlign hAlign = DJUI_HALIGN_LEFT;

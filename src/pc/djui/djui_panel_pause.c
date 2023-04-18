@@ -1,4 +1,12 @@
 #include "djui.h"
+#include "djui_panel.h"
+#include "djui_panel_player.h"
+#include "djui_panel_dynos.h"
+#include "djui_panel_options.h"
+#include "djui_panel_cheats.h"
+#include "djui_panel_host.h"
+#include "djui_panel_menu.h"
+#include "djui_panel_confirm.h"
 #include "pc/cheats.h"
 #include "pc/pc_main.h"
 #include "pc/network/network.h"
@@ -13,6 +21,7 @@ static void djui_panel_pause_resume(UNUSED struct DjuiBase* caller) {
 }
 
 static void djui_panel_pause_quit_yes(UNUSED struct DjuiBase* caller) {
+    network_reset_reconnect_and_rehost();
     network_shutdown(true, false, false);
 }
 
@@ -21,13 +30,13 @@ static void djui_panel_pause_quit(struct DjuiBase* caller) {
 
     if (gNetworkType == NT_SERVER) {
         djui_panel_confirm_create(caller,
-                                "\\#ff0800\\Q\\#1be700\\U\\#00b3ff\\I\\#ffef00\\T",
-                                "Are you sure you want to stop hosting?",
+                                DLANG(PAUSE, QUIT_TITLE),
+                                DLANG(PAUSE, QUIT_HOST),
                                 djui_panel_pause_quit_yes);
     } else {
         djui_panel_confirm_create(caller,
-                                "\\#ff0800\\Q\\#1be700\\U\\#00b3ff\\I\\#ffef00\\T",
-                                "Are you sure you want to disconnect?",
+                                DLANG(PAUSE, QUIT_TITLE),
+                                DLANG(PAUSE, QUIT_CLIENT),
                                 djui_panel_pause_quit_yes);
     }
 }
@@ -35,61 +44,38 @@ static void djui_panel_pause_quit(struct DjuiBase* caller) {
 void djui_panel_pause_create(struct DjuiBase* caller) {
     if (gDjuiChatBoxFocus) { djui_chat_box_toggle(); }
 
-    f32 bodyHeight = 64 * 5 + 16 * 4;
-    if (Cheats.enabled) { bodyHeight += 64 + 16; }
-
     struct DjuiBase* defaultBase = NULL;
-    struct DjuiThreePanel* panel = djui_panel_menu_create(bodyHeight, "\\#ff0800\\P\\#1be700\\A\\#00b3ff\\U\\#ffef00\\S\\#ff0800\\E");
-    struct DjuiFlowLayout* body = (struct DjuiFlowLayout*)djui_three_panel_get_body(panel);
+    struct DjuiThreePanel* panel = djui_panel_menu_create(DLANG(PAUSE, PAUSE_TITLE));
+    struct DjuiBase* body = djui_three_panel_get_body(panel);
     {
         
-        struct DjuiRect* rect1 = djui_rect_create(&body->base);
-        djui_base_set_size_type(&rect1->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&rect1->base, 1.0f, 64);
-        djui_base_set_color(&rect1->base, 0, 0, 0, 0);
+        struct DjuiRect* rect1 = djui_rect_container_create(body, 64);
+        {
+            djui_button_left_create(&rect1->base, DLANG(PAUSE, PLAYER), DJUI_BUTTON_STYLE_NORMAL, djui_panel_player_create);
+            djui_button_right_create(&rect1->base, DLANG(PAUSE, DYNOS_PACKS), DJUI_BUTTON_STYLE_NORMAL, djui_panel_dynos_create);
+        }
 
-        struct DjuiButton* button1 = djui_button_create(&rect1->base, "Player");
-        djui_base_set_size_type(&button1->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&button1->base, 0.47f, 64);
-        djui_interactable_hook_click(&button1->base, djui_panel_player_create);
-
-        struct DjuiButton* button2 = djui_button_create(&rect1->base, "DynOS Packs");
-        djui_base_set_size_type(&button2->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&button2->base, 0.5f, 64);
-        djui_base_set_alignment(&button2->base, DJUI_HALIGN_RIGHT, DJUI_VALIGN_TOP);
-        djui_interactable_hook_click(&button2->base, djui_panel_dynos_create);
-        
-        struct DjuiButton* button3 = djui_button_create(&body->base, "Options");
-        djui_base_set_size_type(&button3->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&button3->base, 1.0f, 64);
-        djui_interactable_hook_click(&button3->base, djui_panel_options_create);
+        struct DjuiButton* button3 = djui_button_create(body, DLANG(PAUSE, OPTIONS), DJUI_BUTTON_STYLE_NORMAL, djui_panel_options_create);
         defaultBase = &button3->base;
 
-        if (Cheats.enabled) {
-            struct DjuiButton* button4 = djui_button_create(&body->base, "Cheats");
-            djui_base_set_size_type(&button4->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-            djui_base_set_size(&button4->base, 1.0f, 64);
-            djui_interactable_hook_click(&button4->base, djui_panel_cheats_create);
+        if (gServerSettings.enableCheats) {
+            djui_button_create(body, DLANG(PAUSE, CHEATS), DJUI_BUTTON_STYLE_NORMAL, djui_panel_cheats_create);
         }
 
-        struct DjuiButton* button5 = djui_button_create(&body->base, "Resume");
-        djui_base_set_size_type(&button5->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&button5->base, 1.0f, 64);
-        djui_interactable_hook_click(&button5->base, djui_panel_pause_resume);
-
-        struct DjuiButton* button6;
         if (gNetworkType == NT_SERVER) {
-            button6 = djui_button_create(&body->base, "Stop Hosting");
-        } else {
-            button6 = djui_button_create(&body->base, "Disconnect");
+            djui_button_create(body, DLANG(PAUSE, SERVER_SETTINGS), DJUI_BUTTON_STYLE_NORMAL, djui_panel_host_create);
         }
-        djui_base_set_size_type(&button6->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
-        djui_base_set_size(&button6->base, 1.0f, 64);
-        djui_interactable_hook_click(&button6->base, djui_panel_pause_quit);
-        djui_button_set_style(button6, 1);
+
+        djui_button_create(body, DLANG(PAUSE, RESUME), DJUI_BUTTON_STYLE_NORMAL, djui_panel_pause_resume);
+
+        if (gNetworkType == NT_SERVER) {
+            djui_button_create(body, DLANG(PAUSE, STOP_HOSTING), DJUI_BUTTON_STYLE_BACK, djui_panel_pause_quit);
+        } else {
+            djui_button_create(body, DLANG(PAUSE, DISCONNECT), DJUI_BUTTON_STYLE_BACK, djui_panel_pause_quit);
+        }
     }
     
-    djui_panel_add(caller, &panel->base, defaultBase);
+    djui_panel_add(caller, panel, defaultBase);
     gInteractableOverridePad = true;
     gDjuiPanelPauseCreated = true;
 }

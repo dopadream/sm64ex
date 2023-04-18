@@ -398,6 +398,7 @@ struct MarioState
     /*????*/ Vec3f wallNormal;
     /*????*/ u8 visibleToEnemies;
     /*????*/ u32 cap;
+    /*????*/ u8 bounceSquishTimer;
 };
 
 struct TextureInfo
@@ -416,9 +417,10 @@ struct TextureInfo
 
 #define MAX_PLAYERS 16
 
-#define COOP_OBJ_FLAG_NETWORK  (1 << 0)
-#define COOP_OBJ_FLAG_LUA      (1 << 1)
-#define COOP_OBJ_FLAG_NON_SYNC (1 << 2)
+#define COOP_OBJ_FLAG_NETWORK     (1 << 0)
+#define COOP_OBJ_FLAG_LUA         (1 << 1)
+#define COOP_OBJ_FLAG_NON_SYNC    (1 << 2)
+#define COOP_OBJ_FLAG_INITIALIZED (1 << 3)
 
 #include "src/game/characters.h"
 #include "data/dynos.c.h"

@@ -4010,6 +4010,12 @@ function take_damage_and_knock_back(m, o)
     -- ...
 end
 
+--- @param otherNp NetworkPlayer
+--- @return MarioState
+function lag_compensation_get_local_state(otherNp)
+    -- ...
+end
+
 --- @param courseNum integer
 --- @param levelNum integer
 --- @param areaIndex integer
@@ -8344,6 +8350,11 @@ function get_network_area_timer()
     -- ...
 end
 
+--- @return string
+function get_os_name()
+    -- ...
+end
+
 --- @return integer
 function get_skybox()
     -- ...
@@ -8765,6 +8776,11 @@ end
 --- @param text string
 --- @return nil
 function smlua_text_utils_extra_text_replace(index, text)
+    -- ...
+end
+
+--- @return string
+function smlua_text_utils_get_language()
     -- ...
 end
 
